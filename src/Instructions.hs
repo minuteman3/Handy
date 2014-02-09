@@ -38,6 +38,14 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | NV -- Never                | False
                deriving (Show, Eq)
 
+{--
+    TODO: Add `S` flag to instructions
+
+          Either need to create: duplicate instructions, eg. ADD/ADDS, SUB/SUBS
+                                 add another argument to data constructors, eg.
+                                     ADD :: Condition -> UpdateFlag -> Dest...
+ --}
+
 data Instruction where
     ADD  :: Condition -> Destination -> Argument a -> Argument b -> Instruction
     SUB  :: Condition -> Destination -> Argument a -> Argument b -> Instruction
