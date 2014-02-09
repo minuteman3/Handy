@@ -30,7 +30,8 @@ nextInstruction = do machine <- get
 
 incPC :: Run ()
 incPC = do machine <- get
-           setRegister Reg.PC $ ((registers machine) `Reg.get` Reg.PC) + 1
+           let rf = (registers machine)
+           setRegister Reg.PC $ (rf `Reg.get` Reg.PC) + 1
 
 execute :: Instruction -> Run ()
 execute (MOV cond dest src)       = do machine <- get
@@ -122,10 +123,6 @@ setCPSR result cpsr = cpsr { negative = testBitDefault result 31
                            -- TODO: Overflow and Carry flag implementation
                            }
 
-getRegister :: Reg.Register -> Run Int32
-getRegister r = do machine <- get
-                   return $ registers machine `Reg.get` r
-
 setRegister :: Reg.Register -> Int32 -> Run ()
 setRegister r v = state $ (\machine -> ((), machine { registers = Reg.set (registers machine) r v }))
 
@@ -138,3 +135,6 @@ testProg = [MOV AL Reg.R0 (ArgC 10),
             ADD AL Reg.R2 (ArgR Reg.R0) (ArgR Reg.R1),
             MUL AL Reg.R2 (ArgR Reg.R2) (ArgR Reg.R1),
             HALT]
+
+runRun :: Memory -> IO ((), Machine)
+runRun mem = runStateT run (newMachine mem)
