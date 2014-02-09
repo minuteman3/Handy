@@ -4,6 +4,7 @@ module Handy.Instructions where
 import Handy.Registers (Register)
 import Data.Int (Int32)
 import Data.List (elem)
+import Prelude hiding (EQ,LT,GT)
 
 type Destination = Register
 type Constant = Int32
@@ -36,7 +37,27 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | LE -- Signed less/equal    | Zero flag set or Negative flag !== Overflow flag
                | AL -- Always               | True
                | NV -- Never                | False
-               deriving (Show, Eq)
+               deriving Eq
+
+instance Show Condition where
+    show AL = ""
+    show EQ = "EQ"
+    show NE = "NE"
+    show CS = "CS"
+    show HS = "HS"
+    show CC = "CC"
+    show LO = "LO"
+    show MI = "MI"
+    show PL = "PL"
+    show VS = "VS"
+    show VC = "VC"
+    show HI = "HI"
+    show LS = "LS"
+    show GE = "GE"
+    show LT = "LT"
+    show GT = "GT"
+    show LE = "LE"
+    show NV = "NV"
 
 {--
     TODO: Add `S` flag to instructions
