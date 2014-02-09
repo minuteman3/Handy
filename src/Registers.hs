@@ -2,6 +2,7 @@ module Handy.Registers (
     get,
     set,
     blankRegisterFile,
+    RegisterFile,
     Register(R0,
              R1,
              R2,
