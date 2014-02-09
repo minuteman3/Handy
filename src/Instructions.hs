@@ -49,7 +49,7 @@ data Instruction where
     B    :: Condition -> Argument a  -> Instruction
     BL   :: Condition -> Argument a  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
-    HALT :: Instruction
+    HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
 
 instance Show Instruction where
     show (ADD cond dest src1 src2) = "ADD" ++ show cond ++ " " ++ show dest ++ ", "
