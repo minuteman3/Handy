@@ -68,14 +68,15 @@ instance Show Condition where
  --}
 
 data Instruction where
-    ADD  :: Condition -> Destination -> Argument a -> Argument b -> Instruction
-    SUB  :: Condition -> Destination -> Argument a -> Argument b -> Instruction
-    RSB  :: Condition -> Destination -> Argument a -> Argument b -> Instruction
-    MUL  :: Condition -> Destination -> Argument a -> Argument Register -> Instruction
-    CMP  :: Condition -> Argument a  -> Argument b -> Instruction
+    ADD  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
+    SUB  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
+    RSB  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
+    MUL  :: Condition -> Destination -> Argument Register -> Argument Register -> Instruction
+    CMP  :: Condition -> Argument Register  -> Argument b -> Instruction
     MOV  :: Condition -> Destination -> Argument a -> Instruction
     NEG  :: Condition -> Destination -> Argument a -> Instruction
-    B    :: Condition -> Argument a  -> Instruction
+    -- FIXME: B is supposed to take a label argument but label isn't implemented yet.
+    B    :: Condition -> Argument Constant  -> Instruction
     BL   :: Condition -> Argument a  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
     HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
@@ -92,7 +93,7 @@ instance Show Instruction where
     show (CMP cond src1 src2)      = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2
     show (MOV cond dest src1)      = "MOV" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1
     show (NEG cond dest src1)      = "NEG" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1
-    show (B cond src1)             = "B "  ++ show cond ++ show src1
-    show (BX cond src1)            = "BX " ++ show cond ++ show src1
-    show (BL cond src1)            = "BL " ++ show cond ++ show src1
+    show (B cond src1)             = "B "  ++ show cond ++ " " ++ show src1
+    show (BX cond src1)            = "BX " ++ show cond ++ " " ++ show src1
+    show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
     show (HALT)               = ""
