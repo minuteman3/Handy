@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs, StandaloneDeriving #-}
 
 module Handy.Instructions where
-import Handy.Registers (Register)
+import Handy.Registers (Register,RegisterFile,get)
 import Data.Int (Int32)
 import Data.List (elem)
 import Prelude hiding (EQ,LT,GT)
@@ -16,6 +16,10 @@ data Argument a where
 instance Show (Argument a) where
     show (ArgC v) = "#" ++ (show v)
     show (ArgR r) = show r
+
+eval :: Argument a -> RegisterFile -> Int32
+eval (ArgC v) _  = v
+eval (ArgR r) rf = rf `get` r
 
 deriving instance Eq a => Eq (Argument a)
 
@@ -57,6 +61,22 @@ instance Show Condition where
     show GT = "GT"
     show LE = "LE"
 
+data ShiftOp a = LSL (Argument a) -- Logical shift left
+                | LSR (Argument a) -- Logical shift right
+                | ASR (Argument a) -- Arithmetic shift right
+                | ROR (Argument a) -- Rotate right
+                | RRX -- Rotate right + sign extend
+                | NoShift
+                deriving (Eq)
+
+instance Show (ShiftOp a) where
+    show (LSL a) = ", LSL " ++ show a
+    show (LSR a) = ", LSR " ++ show a
+    show (ASR a) = ", ASR " ++ show a
+    show (ROR a) = ", ROR " ++ show a
+    show RRX     = ", RRX"
+    show NoShift = ""
+
 {--
     TODO: Add `S` flag to instructions
 
@@ -66,13 +86,14 @@ instance Show Condition where
  --}
 
 data Instruction where
-    ADD  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
-    SUB  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
-    RSB  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
+    ADD  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    SUB  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    RSB  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     MUL  :: Condition -> Destination -> Argument Register -> Argument Register -> Instruction
-    CMP  :: Condition -> Argument Register  -> Argument a -> Instruction
-    MOV  :: Condition -> Destination -> Argument a -> Instruction
-    NEG  :: Condition -> Destination -> Argument a -> Instruction
+    CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    MOV  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
+    MVN  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
+    NEG  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
     -- FIXME: B and BL are supposed to take a label argument but label isn't implemented yet.
     --        Potentially okay to just use constants (this is how the ISA is implemented) but
     --        a mechanism for labels that works correctly has to be found.
@@ -82,18 +103,20 @@ data Instruction where
     HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
 
 instance Show Instruction where
-    show (ADD cond dest src1 src2) = "ADD" ++ show cond ++ " " ++ show dest ++ ", "
-                                           ++ show src1 ++ ", " ++ show src2
-    show (SUB cond dest src1 src2) = "SUB" ++ show cond ++ " " ++ show dest ++ ", "
-                                           ++ show src1 ++ ", " ++ show src2
-    show (RSB cond dest src1 src2) = "RSB" ++ show cond ++ " " ++ show dest ++ ", "
-                                           ++ show src1 ++ ", " ++ show src2
+    show (ADD cond dest src1 src2 shft) = "ADD" ++ stringify3aryOp cond dest src1 src2 shft
+    show (SUB cond dest src1 src2 shft) = "SUB" ++ stringify3aryOp cond dest src1 src2 shft
+    show (RSB cond dest src1 src2 shft) = "RSB" ++ stringify3aryOp cond dest src1 src2 shft
     show (MUL cond dest src1 src2) = "MUL" ++ show cond ++ " " ++ show dest ++ ", "
                                            ++ show src1 ++ ", " ++ show src2
-    show (CMP cond src1 src2)      = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2
-    show (MOV cond dest src1)      = "MOV" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1
-    show (NEG cond dest src1)      = "NEG" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1
+    show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ show shft
+    show (MOV cond dest src1 shft) = "MOV" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
+    show (MVN cond dest src1 shft) = "MVN" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
+    show (NEG cond dest src1 shft) = "NEG" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
     show (B cond src1)             = "B "  ++ show cond ++ " " ++ show src1
     show (BX cond src1)            = "BX " ++ show cond ++ " " ++ show src1
     show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
     show (HALT)               = ""
+
+stringify3aryOp :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
+stringify3aryOp cond dest src1 src2 shft = show cond ++ " " ++ show dest ++ ", " ++ show src1
+                                                     ++ ", " ++ show src2 ++ show shft
