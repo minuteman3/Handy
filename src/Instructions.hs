@@ -68,16 +68,16 @@ instance Show Condition where
  --}
 
 data Instruction where
-    ADD  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
-    SUB  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
-    RSB  :: Condition -> Destination -> Argument Register -> Argument b -> Instruction
+    ADD  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
+    SUB  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
+    RSB  :: Condition -> Destination -> Argument Register -> Argument a -> Instruction
     MUL  :: Condition -> Destination -> Argument Register -> Argument Register -> Instruction
-    CMP  :: Condition -> Argument Register  -> Argument b -> Instruction
+    CMP  :: Condition -> Argument Register  -> Argument a -> Instruction
     MOV  :: Condition -> Destination -> Argument a -> Instruction
     NEG  :: Condition -> Destination -> Argument a -> Instruction
-    -- FIXME: B is supposed to take a label argument but label isn't implemented yet.
+    -- FIXME: B and BL are supposed to take a label argument but label isn't implemented yet.
     B    :: Condition -> Argument Constant  -> Instruction
-    BL   :: Condition -> Argument a  -> Instruction
+    BL   :: Condition -> Argument Constant  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
     HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
 
