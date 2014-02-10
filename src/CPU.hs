@@ -51,10 +51,17 @@ execute (CMP cond src1 src2)      = do machine <- get
                                        run
 
 -- FIXME: Does not account for the fact B argument can only be +/- 16MB on real processor
---        May not fix.
+--        Correct semantics: PC := PC + (SignExtend_30(signed_immed_24) << 2)
+--        Current semantics: PC := src
 execute (B cond src)              = executeUnOp id cond Reg.PC src
 
-execute (BX cond src)             = executeUnOp id cond Reg.PC src
+execute (BL cond src)             = do machine <- get
+                                       let rf = registers machine
+                                       when (checkCondition cond $ cpsr machine) $
+                                            setRegister Reg.LR (rf `Reg.get` Reg.PC)
+                                       execute (B cond src)
+
+execute (BX cond src)             = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src
 
 executeUnOp :: (Int32 -> Int32) -> Condition -> Destination -> Argument a -> Run ()
 executeUnOp op cond dest src = do machine <- get
@@ -132,7 +139,8 @@ testProg2 = [MOV AL Reg.R0 (ArgC 2),
              MOV AL Reg.R1 (ArgC 1),
              ADD AL Reg.R1 (ArgR Reg.R1) (ArgC 1),
              CMP AL (ArgR Reg.R1) (ArgC 10),
-             BX  NE (ArgR Reg.R0),
+             {-BX  NE (ArgR Reg.R0),-}
+             BL NE (ArgC 2),
              HALT]
 
 runRun :: Memory -> IO ((), Machine)
