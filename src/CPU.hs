@@ -137,7 +137,7 @@ checkCondition HS cpsr = checkCondition CS cpsr
 checkCondition LO cpsr = checkCondition CC cpsr
 
 setCPSR :: Int32 -> StatusRegister -> StatusRegister
-setCPSR result cpsr = cpsr { negative = testBitDefault result 31
+setCPSR result cpsr = cpsr { negative = testBit result 31
                            , zero     = result == 0
                            -- TODO: Overflow and Carry flag implementation
                            }
