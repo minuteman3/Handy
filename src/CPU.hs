@@ -26,12 +26,13 @@ run = do
 
 nextInstruction :: Run Instruction
 nextInstruction = do machine <- get
-                     return $ (memory machine) !! (fromIntegral $ ((registers machine) `Reg.get` Reg.PC))
+                     let pc = (registers machine) `Reg.get` Reg.PC
+                     return $ (memory machine) !! (fromIntegral pc)
 
 incPC :: Run ()
 incPC = do machine <- get
-           let rf = (registers machine)
-           setRegister Reg.PC $ (rf `Reg.get` Reg.PC) + 1
+           let pc = (registers machine) `Reg.get` Reg.PC
+           setRegister Reg.PC (pc + 1)
 
 execute :: Instruction -> Run ()
 execute HALT = return ()
