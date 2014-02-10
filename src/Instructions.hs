@@ -36,7 +36,6 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | GT -- Signed greater than  | Zero flag clear and Negative flag === Overflow flag
                | LE -- Signed less/equal    | Zero flag set or Negative flag !== Overflow flag
                | AL -- Always               | True
-               | NV -- Never                | False
                deriving Eq
 
 instance Show Condition where
@@ -57,7 +56,6 @@ instance Show Condition where
     show LT = "LT"
     show GT = "GT"
     show LE = "LE"
-    show NV = "NV"
 
 {--
     TODO: Add `S` flag to instructions

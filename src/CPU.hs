@@ -90,7 +90,6 @@ computeBinOp op src1 src2 rf = va `op` vb
 
 checkCondition :: Condition -> StatusRegister -> Bool
 checkCondition AL _ = True
-checkCondition NV _ = False
 checkCondition EQ cpsr = zero cpsr
 checkCondition CS cpsr = carry cpsr
 checkCondition MI cpsr = negative cpsr
