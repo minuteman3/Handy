@@ -34,60 +34,53 @@ incPC = do machine <- get
            setRegister Reg.PC $ (rf `Reg.get` Reg.PC) + 1
 
 execute :: Instruction -> Run ()
-execute (MOV cond dest src)       = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = executeUnOp id src (registers machine)
-                                            setRegister dest result
-                                       incPC
-                                       run
-
-execute (ADD cond dest src1 src2) = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = executeBinOp (+) src1 src2 (registers machine)
-                                            setRegister dest result
-                                       incPC
-                                       run
-
-execute (SUB cond dest src1 src2) = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = executeBinOp (-) src1 src2 (registers machine)
-                                            setRegister dest result
-                                       incPC
-                                       run
-
-execute (RSB cond dest src1 src2) = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = executeBinOp (-) src2 src1 (registers machine)
-                                            setRegister dest result
-                                       incPC
-                                       run
-
-execute (MUL cond dest src1 src2) = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = executeBinOp (*) src1 src2 (registers machine)
-                                            setRegister dest result
-                                       incPC
-                                       run
+execute HALT = return ()
+execute (MOV cond dest src)       = executeUnOp id cond dest src
+execute (NEG cond dest src)       = executeUnOp negate cond dest src
+execute (ADD cond dest src1 src2) = executeBinOp (+) cond dest src1 src2
+execute (SUB cond dest src1 src2) = executeBinOp (-) cond dest src1 src2
+execute (RSB cond dest src1 src2) = executeBinOp (-) cond dest src2 src1
+execute (MUL cond dest src1 src2) = executeBinOp (*) cond dest src1 src2
 
 execute (CMP cond src1 src2)      = do machine <- get
                                        when (checkCondition cond $ cpsr machine) $ do
-                                           let result = executeBinOp (-) src1 src2 (registers machine)
+                                           let result = computeBinOp (-) src1 src2 (registers machine)
                                            let cpsr' = setCPSR result (cpsr machine)
                                            put $ machine { cpsr = cpsr' }
                                        incPC
                                        run
 
-execute HALT = return ()
+-- FIXME: Does not account for the fact B argument can only be +/- 16MB on real processor
+--        May not fix.
+execute (B cond src)              = executeUnOp id cond Reg.PC src
+
+execute (BX cond src)             = executeUnOp id cond Reg.PC src
+
+executeUnOp :: (Int32 -> Int32) -> Condition -> Destination -> Argument a -> Run ()
+executeUnOp op cond dest src = do machine <- get
+                                  incPC
+                                  when (checkCondition cond $ cpsr machine) $ do
+                                       let result = computeUnOp op src (registers machine)
+                                       setRegister dest result
+                                  run
+
+executeBinOp :: (Int32 -> Int32 -> Int32) -> Condition -> Destination -> Argument a -> Argument b -> Run ()
+executeBinOp op cond dest src1 src2 = do machine <- get
+                                         incPC
+                                         when (checkCondition cond $ cpsr machine) $ do
+                                              let result = computeBinOp op src1 src2 (registers machine)
+                                              setRegister dest result
+                                         run
 
 
-executeUnOp :: (Int32 -> Int32) -> Argument a -> Reg.RegisterFile -> Int32
-executeUnOp op src rf = op v
+computeUnOp :: (Int32 -> Int32) -> Argument a -> Reg.RegisterFile -> Int32
+computeUnOp op src rf = op v
                         where v = case src of
                                    (ArgC a) -> a
                                    (ArgR a) -> rf `Reg.get` a
 
-executeBinOp :: (Int32 -> Int32 -> Int32) -> Argument a -> Argument b -> Reg.RegisterFile -> Int32
-executeBinOp op src1 src2 rf = va `op` vb
+computeBinOp :: (Int32 -> Int32 -> Int32) -> Argument a -> Argument b -> Reg.RegisterFile -> Int32
+computeBinOp op src1 src2 rf = va `op` vb
                                where va = case src1 of
                                            (ArgC a) -> a
                                            (ArgR a) -> rf `Reg.get` a
@@ -135,6 +128,13 @@ testProg = [MOV AL Reg.R0 (ArgC 10),
             ADD AL Reg.R2 (ArgR Reg.R0) (ArgR Reg.R1),
             MUL AL Reg.R2 (ArgR Reg.R2) (ArgR Reg.R1),
             HALT]
+
+testProg2 = [MOV AL Reg.R0 (ArgC 2),
+             MOV AL Reg.R1 (ArgC 1),
+             ADD AL Reg.R1 (ArgR Reg.R1) (ArgC 1),
+             CMP AL (ArgR Reg.R1) (ArgC 10),
+             BX  NE (ArgR Reg.R0),
+             HALT]
 
 runRun :: Memory -> IO ((), Machine)
 runRun mem = runStateT run (newMachine mem)
