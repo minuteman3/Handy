@@ -94,9 +94,6 @@ data Instruction where
     MOV  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
     MVN  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
     NEG  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
-    -- FIXME: B and BL are supposed to take a label argument but label isn't implemented yet.
-    --        Potentially okay to just use constants (this is how the ISA is implemented) but
-    --        a mechanism for labels that works correctly has to be found.
     B    :: Condition -> Argument Constant  -> Instruction
     BL   :: Condition -> Argument Constant  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
