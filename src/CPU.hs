@@ -15,68 +15,102 @@ import Data.Int (Int32)
 import Data.Word (Word32)
 import Data.Bits
 
+type FetchRegister   = Maybe Instruction
+type DecodeRegister  = Maybe Instruction
+type ExecuteRegister = Maybe Instruction
+
 data Machine = Machine { registers :: Reg.RegisterFile
-                       , memory :: Memory
-                       , cpsr   :: StatusRegister
+                       , memory    :: Memory
+                       , cpsr      :: StatusRegister
+                       , executing :: Bool
+                       , fetchR    :: FetchRegister
+                       , decodeR   :: DecodeRegister
+                       , executeR  :: ExecuteRegister
                        } deriving Show
 
 type Run a = StateT Machine IO a
 run :: Run ()
 run = do
-    i <- nextInstruction
-    incPC
-    execute i
+    running <- gets executing
+    when (running) $ do
+        modify pipeline
+        i <- gets executeR
+        execute i
+        modify incPC
+        run
 
-nextInstruction :: Run Instruction
-nextInstruction = do machine <- get
-                     let pc = (registers machine) `Reg.get` Reg.PC
-                     return $ (memory machine) !! (fromIntegral (pc `div` 4))
+{-
+    TODO/FIXME:
+    Currently decode is a no op because instructions arrive fully formed.
+    Later, fetchR should be a "Maybe Word32", and there should be an instruction
+    decoder with type Word32 -> Instruction that gets applied to the contents of
+    decodeR as they move into executeR
+-}
+pipeline :: Machine -> Machine
+pipeline machine = machine { fetchR   = nextInstruction machine
+                           , decodeR  = fetchR machine
+                           , executeR = decodeR machine
+                           }
 
-incPC :: Run ()
-incPC = do machine <- get
-           let pc = (registers machine) `Reg.get` Reg.PC
-           setRegister Reg.PC (pc + 4)
+flushPipeline :: Machine -> Machine
+flushPipeline machine = machine { fetchR   = Nothing
+                                , decodeR  = Nothing
+                                , executeR = Nothing
+                                }
 
+nextInstruction :: Machine -> Maybe Instruction
+nextInstruction machine = let pc = fromIntegral $ (registers machine) `Reg.get` Reg.PC in
+                             if pc <= (4 * length (memory machine)) - 1  then
+                                Just $ (memory machine) !! (pc `div` 4)
+                             else Nothing
 
-execute :: Instruction -> Run ()
-execute HALT = return ()
-execute (MOV cond dest src shft)       = executeUnOp id cond dest src shft
-execute (NEG cond dest src shft)       = executeUnOp negate cond dest src shft
-execute (MVN cond dest src shft)       = executeUnOp complement cond dest src shft
-execute (ADD cond dest src1 src2 shft) = executeBinOp (+) cond dest src1 src2 shft
-execute (SUB cond dest src1 src2 shft) = executeBinOp (-) cond dest src1 src2 shft
-execute (RSB cond dest src1 src2 shft) = executeBinOp (-) cond dest src2 src1 shft
-execute (MUL cond dest src1 src2)      = executeBinOp (*) cond dest src1 src2 NoShift
+incPC :: Machine -> Machine
+incPC machine = let pc = (registers machine) `Reg.get` Reg.PC in
+                  setRegister Reg.PC (pc + 4) machine
 
-execute (CMP cond src1 src2 shft ) = do machine <- get
+execute :: Maybe Instruction -> Run ()
+execute Nothing = return ()
+execute (Just i) = execute' i
+
+execute' :: Instruction -> Run ()
+execute' HALT = state $ (\machine -> ((),machine { executing = False }))
+execute' (MOV cond dest src shft)       = executeUnOp id cond dest src shft
+execute' (NEG cond dest src shft)       = executeUnOp negate cond dest src shft
+execute' (MVN cond dest src shft)       = executeUnOp complement cond dest src shft
+execute' (ADD cond dest src1 src2 shft) = executeBinOp (+) cond dest src1 src2 shft
+execute' (SUB cond dest src1 src2 shft) = executeBinOp (-) cond dest src1 src2 shft
+execute' (RSB cond dest src1 src2 shft) = executeBinOp (-) cond dest src2 src1 shft
+execute' (MUL cond dest src1 src2)      = executeBinOp (*) cond dest src1 src2 NoShift
+
+execute' (CMP cond src1 src2 shft) = do machine <- get
                                         let sr = (cpsr machine)
                                         when (checkCondition cond $ cpsr machine) $ do
                                              let result = computeBinOp (-) src1 src2 (registers machine) shft
                                              let cpsr' = setCPSR result sr
                                              put $ machine { cpsr = cpsr' }
-                                        run
 
-execute (B cond src) = do machine <- get
-                          let rf = registers machine
-                          when (checkCondition cond $ cpsr machine) $ do
-                              let offset = computeBranchOffset src
-                              executeBinOp (+) cond Reg.PC (ArgR Reg.PC) offset NoShift
-
-
-execute (BL cond src) = do machine <- get
+execute' (B cond src) = do machine <- get
                            let rf = registers machine
-                           when (checkCondition cond $ cpsr machine) $
-                                setRegister Reg.LR (rf `Reg.get` Reg.PC)
-                           execute (B cond src)
+                           when (checkCondition cond $ cpsr machine) $ do
+                               let offset = computeBranchOffset src
+                               executeBinOp (+) cond Reg.PC (ArgR Reg.PC) offset NoShift
+                               modify $ flushPipeline
 
-execute (BX cond src) = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src NoShift
+
+execute' (BL cond src) = do machine <- get
+                            let rf = registers machine
+                            when (checkCondition cond $ cpsr machine) $ do
+                                let link = (rf `Reg.get` Reg.PC) - 4
+                                modify $ setRegister Reg.LR link
+                            execute' (B cond src)
+
+execute' (BX cond src) = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src NoShift
 
 executeUnOp :: (Int32 -> Int32) -> Condition -> Destination -> Argument a -> ShiftOp b -> Run ()
 executeUnOp op cond dest src shft = do machine <- get
                                        when (checkCondition cond $ cpsr machine) $ do
                                             let result = computeUnOp op src (registers machine) shft
-                                            setRegister dest result
-                                       run
+                                            modify $ setRegister dest result
 
 executeBinOp :: (Int32 -> Int32 -> Int32)
              -> Condition
@@ -90,8 +124,7 @@ executeBinOp op cond dest src1 src2 shft = do machine <- get
                                               let rf = registers machine
                                               when (checkCondition cond $ cpsr machine) $ do
                                                    let result = computeBinOp op src1 src2 rf shft
-                                                   setRegister dest result
-                                              run
+                                                   modify $ setRegister dest result
 
 
 
@@ -152,11 +185,18 @@ checkCondition HS cpsr = checkCondition CS cpsr
 checkCondition LO cpsr = checkCondition CC cpsr
 
 
-setRegister :: Reg.Register -> Int32 -> Run ()
-setRegister r v = state $ (\machine -> ((), machine { registers = Reg.set (registers machine) r v }))
+setRegister :: Reg.Register -> Int32 -> Machine -> Machine
+setRegister r v machine = machine { registers = Reg.set (registers machine) r v }
 
 newMachine :: Memory -> Machine
-newMachine mem = Machine {registers=Reg.blankRegisterFile,memory=mem,cpsr=blankStatusRegister}
+newMachine mem = Machine { registers = Reg.blankRegisterFile
+                         , memory    = mem
+                         , cpsr      = blankStatusRegister
+                         , executing = True
+                         , fetchR    = Nothing
+                         , decodeR   = Nothing
+                         , executeR  = Nothing
+                         }
 
 testProg :: Memory
 testProg = [MOV AL Reg.R0 (ArgC 10) NoShift,
@@ -174,7 +214,7 @@ testProg2 = [MOV AL Reg.R0 (ArgC 2) NoShift,
              MOV AL Reg.R1 (ArgC 1) NoShift,
              ADD AL Reg.R1 (ArgR Reg.R1) (ArgC 1) NoShift,
              CMP AL (ArgR Reg.R1) (ArgC 10) NoShift,
-             BL NE (ArgC $ negate 3),
+             BL NE (ArgC $ negate 5),
              HALT]
 -- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff
 
