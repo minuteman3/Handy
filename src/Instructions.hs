@@ -89,6 +89,9 @@ data Instruction where
     ADD  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     SUB  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     RSB  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    AND  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    ORR  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    EOR  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     MUL  :: Condition -> Destination -> Argument Register -> Argument Register -> Instruction
     CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     MOV  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
@@ -103,6 +106,9 @@ instance Show Instruction where
     show (ADD cond dest src1 src2 shft) = "ADD" ++ stringify3aryOp cond dest src1 src2 shft
     show (SUB cond dest src1 src2 shft) = "SUB" ++ stringify3aryOp cond dest src1 src2 shft
     show (RSB cond dest src1 src2 shft) = "RSB" ++ stringify3aryOp cond dest src1 src2 shft
+    show (AND cond dest src1 src2 shft) = "AND" ++ stringify3aryOp cond dest src1 src2 shft
+    show (ORR cond dest src1 src2 shft) = "EOR" ++ stringify3aryOp cond dest src1 src2 shft
+    show (EOR cond dest src1 src2 shft) = "" ++ stringify3aryOp cond dest src1 src2 shft
     show (MUL cond dest src1 src2) = "MUL" ++ show cond ++ " " ++ show dest ++ ", "
                                            ++ show src1 ++ ", " ++ show src2
     show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ show shft

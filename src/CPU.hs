@@ -58,6 +58,12 @@ flushPipeline machine = machine { fetchR   = Nothing
                                 , executeR = Nothing
                                 }
 
+{-
+    TODO/FIXME:
+    All this bounds checking is only necessary because of the current temporary
+    implementation of memory as a list of instructions. Later on this function
+    should be simplified a lot by just being a call to the memory.
+-}
 nextInstruction :: Machine -> Maybe Instruction
 nextInstruction machine = let pc = fromIntegral $ (registers machine) `Reg.get` Reg.PC in
                              if pc <= (4 * length (memory machine)) - 1  then
@@ -80,6 +86,9 @@ execute' (MVN cond dest src shft)       = executeUnOp complement cond dest src s
 execute' (ADD cond dest src1 src2 shft) = executeBinOp (+) cond dest src1 src2 shft
 execute' (SUB cond dest src1 src2 shft) = executeBinOp (-) cond dest src1 src2 shft
 execute' (RSB cond dest src1 src2 shft) = executeBinOp (-) cond dest src2 src1 shft
+execute' (AND cond dest src1 src2 shft) = executeBinOp (.&.) cond dest src2 src1 shft
+execute' (ORR cond dest src1 src2 shft) = executeBinOp (.|.) cond dest src2 src1 shft
+execute' (EOR cond dest src1 src2 shft) = executeBinOp xor cond dest src2 src1 shft
 execute' (MUL cond dest src1 src2)      = executeBinOp (*) cond dest src1 src2 NoShift
 
 execute' (CMP cond src1 src2 shft) = do machine <- get
@@ -217,6 +226,10 @@ testProg2 = [MOV AL Reg.R0 (ArgC 2) NoShift,
              BL NE (ArgC $ negate 5),
              HALT]
 -- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff
+
+testProg3 = [MOV AL Reg.R0 (ArgC 1) NoShift,
+             EOR AL Reg.R0 (ArgR Reg.R0) (ArgC 3) NoShift,
+             HALT]
 
 runRun :: Memory -> IO ((), Machine)
 runRun mem = runStateT run (newMachine mem)
