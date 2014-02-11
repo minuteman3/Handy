@@ -6,6 +6,7 @@ import Prelude hiding (EQ,LT,GT)
 import Handy.Memory
 import Handy.Instructions
 import Handy.StatusRegister
+import Handy.Util (computeBranchOffset)
 import qualified Handy.Registers as Reg
 
 import Control.Monad.State
@@ -23,17 +24,19 @@ type Run a = StateT Machine IO a
 run :: Run ()
 run = do
     i <- nextInstruction
+    incPC
     execute i
 
 nextInstruction :: Run Instruction
 nextInstruction = do machine <- get
                      let pc = (registers machine) `Reg.get` Reg.PC
-                     return $ (memory machine) !! (fromIntegral pc)
+                     return $ (memory machine) !! (fromIntegral (pc `div` 4))
 
 incPC :: Run ()
 incPC = do machine <- get
            let pc = (registers machine) `Reg.get` Reg.PC
-           setRegister Reg.PC (pc + 1)
+           setRegister Reg.PC (pc + 4)
+
 
 execute :: Instruction -> Run ()
 execute HALT = return ()
@@ -46,29 +49,30 @@ execute (RSB cond dest src1 src2 shft) = executeBinOp (-) cond dest src2 src1 sh
 execute (MUL cond dest src1 src2)      = executeBinOp (*) cond dest src1 src2 NoShift
 
 execute (CMP cond src1 src2 shft ) = do machine <- get
+                                        let sr = (cpsr machine)
                                         when (checkCondition cond $ cpsr machine) $ do
                                              let result = computeBinOp (-) src1 src2 (registers machine) shft
-                                             let cpsr' = setCPSR result (cpsr machine)
+                                             let cpsr' = setCPSR result sr
                                              put $ machine { cpsr = cpsr' }
-                                        incPC
                                         run
 
--- FIXME: Does not account for the fact B argument can only be +/- 16MB on real processor
---        Correct semantics: PC := PC + (SignExtend_30(signed_immed_24) << 2)
---        Current semantics: PC := src
-execute (B cond src)              = executeUnOp id cond Reg.PC src NoShift
+execute (B cond src) = do machine <- get
+                          let rf = registers machine
+                          when (checkCondition cond $ cpsr machine) $ do
+                              let offset = computeBranchOffset src
+                              executeBinOp (+) cond Reg.PC (ArgR Reg.PC) offset NoShift
 
-execute (BL cond src)             = do machine <- get
-                                       let rf = registers machine
-                                       when (checkCondition cond $ cpsr machine) $
-                                            setRegister Reg.LR (rf `Reg.get` Reg.PC)
-                                       execute (B cond src)
 
-execute (BX cond src)             = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src NoShift
+execute (BL cond src) = do machine <- get
+                           let rf = registers machine
+                           when (checkCondition cond $ cpsr machine) $
+                                setRegister Reg.LR (rf `Reg.get` Reg.PC)
+                           execute (B cond src)
+
+execute (BX cond src) = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src NoShift
 
 executeUnOp :: (Int32 -> Int32) -> Condition -> Destination -> Argument a -> ShiftOp b -> Run ()
 executeUnOp op cond dest src shft = do machine <- get
-                                       incPC
                                        when (checkCondition cond $ cpsr machine) $ do
                                             let result = computeUnOp op src (registers machine) shft
                                             setRegister dest result
@@ -81,22 +85,33 @@ executeBinOp :: (Int32 -> Int32 -> Int32)
              -> Argument b
              -> ShiftOp c
              -> Run ()
+
 executeBinOp op cond dest src1 src2 shft = do machine <- get
-                                              incPC
+                                              let rf = registers machine
                                               when (checkCondition cond $ cpsr machine) $ do
-                                                   let result = computeBinOp op src1 src2 (registers machine) shft
+                                                   let result = computeBinOp op src1 src2 rf shft
                                                    setRegister dest result
                                               run
 
 
+
 computeUnOp :: (Int32 -> Int32) -> Argument a -> Reg.RegisterFile -> ShiftOp b -> Int32
-computeUnOp op src rf shft = op (computeShift v shft rf)
-                             where v = src `eval` rf
+computeUnOp op src rf shft = op v'
+                             where v  = src `eval` rf
+                                   v' = fromIntegral $ computeShift v shft rf
 
 computeBinOp :: (Int32 -> Int32 -> Int32) -> Argument a -> Argument b -> Reg.RegisterFile -> ShiftOp c -> Int32
-computeBinOp op src1 src2 rf shft = va `op` (computeShift vb shft rf)
-                                    where va = src1 `eval` rf
-                                          vb = src2 `eval` rf
+computeBinOp op src1 src2 rf shft = result
+                                    where va  = src1 `eval` rf
+                                          vb  = src2 `eval` rf
+                                          vb' = computeShift vb shft rf
+                                          result = va `op` vb'
+
+setCPSR :: Int32 -> StatusRegister -> StatusRegister
+setCPSR result cpsr = cpsr { negative = testBit result 31
+                           , zero     = result == 0
+                           -- TODO: Overflow and Carry flag implementation
+                           }
 
 computeShift :: Int32 -> ShiftOp a -> Reg.RegisterFile -> Int32
 computeShift val (NoShift) _ = val
@@ -136,11 +151,6 @@ checkCondition LE cpsr = not $ checkCondition GT cpsr
 checkCondition HS cpsr = checkCondition CS cpsr
 checkCondition LO cpsr = checkCondition CC cpsr
 
-setCPSR :: Int32 -> StatusRegister -> StatusRegister
-setCPSR result cpsr = cpsr { negative = testBit result 31
-                           , zero     = result == 0
-                           -- TODO: Overflow and Carry flag implementation
-                           }
 
 setRegister :: Reg.Register -> Int32 -> Run ()
 setRegister r v = state $ (\machine -> ((), machine { registers = Reg.set (registers machine) r v }))
@@ -156,12 +166,15 @@ testProg = [MOV AL Reg.R0 (ArgC 10) NoShift,
             HALT]
 -- Expect final state: R0 = 10, R1 = 40, R2 = 2000, R15 = 4, all other registers = 0, CPSR = ffff
 
+testProg1 = [MOV AL Reg.R0 (ArgC 10) NoShift,
+             SUB AL Reg.R0 (ArgR Reg.R0) (ArgC 11) NoShift,
+             HALT]
+
 testProg2 = [MOV AL Reg.R0 (ArgC 2) NoShift,
              MOV AL Reg.R1 (ArgC 1) NoShift,
              ADD AL Reg.R1 (ArgR Reg.R1) (ArgC 1) NoShift,
              CMP AL (ArgR Reg.R1) (ArgC 10) NoShift,
-             {-BX  NE (ArgR Reg.R0),-}
-             BL NE (ArgC 2),
+             BL NE (ArgC $ negate 3),
              HALT]
 -- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff
 
