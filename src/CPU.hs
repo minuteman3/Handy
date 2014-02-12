@@ -6,7 +6,8 @@ import Prelude hiding (EQ,LT,GT)
 import Handy.Memory
 import Handy.Instructions
 import Handy.StatusRegister
-import Handy.Util (computeBranchOffset)
+import Handy.ALU
+import Handy.Util (computeBranchOffset, checkCondition)
 import qualified Handy.Registers as Reg
 
 import Control.Monad.State
@@ -81,7 +82,6 @@ execute (Just i) = execute' i
 execute' :: Instruction -> Run ()
 execute' HALT = state $ (\machine -> ((),machine { executing = False }))
 execute' (MOV cond dest src shft)       = executeUnOp id cond dest src shft
-execute' (NEG cond dest src shft)       = executeUnOp negate cond dest src shft
 execute' (MVN cond dest src shft)       = executeUnOp complement cond dest src shft
 execute' (ADD cond dest src1 src2 shft) = executeBinOp (+) cond dest src1 src2 shft
 execute' (SUB cond dest src1 src2 shft) = executeBinOp (-) cond dest src1 src2 shft
@@ -155,81 +155,7 @@ setCPSR result cpsr = cpsr { negative = testBit result 31
                            -- TODO: Overflow and Carry flag implementation
                            }
 
-computeShift :: Int32 -> ShiftOp a -> Reg.RegisterFile -> Int32
-computeShift val (NoShift) _ = val
-computeShift val (RRX) _ = undefined
-computeShift val (LSL shft) rf = computeShift' shiftL val shft rf
-computeShift val (ASR shft) rf = computeShift' shiftR val shft rf
-computeShift val (ROR shft) rf = computeShift' rotateR val shft rf
-
--- Doesn't use HOF because it has special cases
-computeShift val (LSR shft) rf = result where result  = fromIntegral $ val' `shiftR` degree'
-                                              degree  = fromIntegral $ shft `eval` rf
-                                              val'    = (fromIntegral val) :: Word32
-                                              degree' = if degree == 0 then 32 else degree
-
-computeShift' :: (Num a, Bits a) => (a -> Int -> a) -> a -> Argument b -> Reg.RegisterFile -> a
-computeShift' op val shft rf = result where result = val `op` degree
-                                            degree = fromIntegral $ shft `eval` rf
-
-checkCondition :: Condition -> StatusRegister -> Bool
-checkCondition AL _ = True
-checkCondition EQ cpsr = zero cpsr
-checkCondition CS cpsr = carry cpsr
-checkCondition MI cpsr = negative cpsr
-checkCondition VS cpsr = overflow cpsr
-checkCondition HI cpsr = (carry cpsr) && (not $ zero cpsr)
-checkCondition GE cpsr = (negative cpsr) == (overflow cpsr)
-
-checkCondition NE cpsr = not $ checkCondition EQ cpsr
-checkCondition CC cpsr = not $ checkCondition CS cpsr
-checkCondition PL cpsr = not $ checkCondition MI cpsr
-checkCondition VC cpsr = not $ checkCondition VS cpsr
-checkCondition LS cpsr = not $ checkCondition HI cpsr
-checkCondition LT cpsr = not $ checkCondition GE cpsr
-checkCondition GT cpsr = (not $ zero cpsr) && (checkCondition GE cpsr)
-checkCondition LE cpsr = not $ checkCondition GT cpsr
-
-checkCondition HS cpsr = checkCondition CS cpsr
-checkCondition LO cpsr = checkCondition CC cpsr
 
 
 setRegister :: Reg.Register -> Int32 -> Machine -> Machine
 setRegister r v machine = machine { registers = Reg.set (registers machine) r v }
-
-newMachine :: Memory -> Machine
-newMachine mem = Machine { registers = Reg.blankRegisterFile
-                         , memory    = mem
-                         , cpsr      = blankStatusRegister
-                         , executing = True
-                         , fetchR    = Nothing
-                         , decodeR   = Nothing
-                         , executeR  = Nothing
-                         }
-
-testProg :: Memory
-testProg = [MOV AL Reg.R0 (ArgC 10) NoShift,
-            MOV AL Reg.R1 (ArgC 20) (LSL (ArgC 1)),
-            ADD AL Reg.R2 (ArgR Reg.R0) (ArgR Reg.R1) NoShift,
-            MUL AL Reg.R2 (ArgR Reg.R2) (ArgR Reg.R1),
-            HALT]
--- Expect final state: R0 = 10, R1 = 40, R2 = 2000, R15 = 4, all other registers = 0, CPSR = ffff
-
-testProg1 = [MOV AL Reg.R0 (ArgC 10) NoShift,
-             SUB AL Reg.R0 (ArgR Reg.R0) (ArgC 11) NoShift,
-             HALT]
-
-testProg2 = [MOV AL Reg.R0 (ArgC 2) NoShift,
-             MOV AL Reg.R1 (ArgC 1) NoShift,
-             ADD AL Reg.R1 (ArgR Reg.R1) (ArgC 1) NoShift,
-             CMP AL (ArgR Reg.R1) (ArgC 10) NoShift,
-             BL NE (ArgC $ negate 5),
-             HALT]
--- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff
-
-testProg3 = [MOV AL Reg.R0 (ArgC 1) NoShift,
-             EOR AL Reg.R0 (ArgR Reg.R0) (ArgC 3) NoShift,
-             HALT]
-
-runRun :: Memory -> IO ((), Machine)
-runRun mem = runStateT run (newMachine mem)

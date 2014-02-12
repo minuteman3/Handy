@@ -96,7 +96,6 @@ data Instruction where
     CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     MOV  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
     MVN  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
-    NEG  :: Condition -> Destination -> Argument a -> ShiftOp b -> Instruction
     B    :: Condition -> Argument Constant  -> Instruction
     BL   :: Condition -> Argument Constant  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
@@ -114,7 +113,6 @@ instance Show Instruction where
     show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ show shft
     show (MOV cond dest src1 shft) = "MOV" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
     show (MVN cond dest src1 shft) = "MVN" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
-    show (NEG cond dest src1 shft) = "NEG" ++ show cond ++ " " ++ show dest ++ ", " ++ show src1 ++ show shft
     show (B cond src1)             = "B "  ++ show cond ++ " " ++ show src1
     show (BX cond src1)            = "BX " ++ show cond ++ " " ++ show src1
     show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
