@@ -21,7 +21,8 @@ module Handy.Registers (
              R15,
              SP,
              LR,
-             PC
+             PC,
+             None
              )
 ) where
 
@@ -46,7 +47,8 @@ data Register = R0
               | SP
               | LR
               | PC
-              deriving (Show, Eq)
+              | None
+              deriving (Show, Eq, Enum)
 
 data RegisterFile = RegisterFile {
     _r0  :: Int32,
@@ -108,6 +110,7 @@ get rf r = case r of
              SP  -> _r13 rf
              LR  -> _r14 rf
              PC  -> _r15 rf
+             None -> 0
 
 set :: RegisterFile -> Register -> Int32 -> RegisterFile
 set rf r v = case r of
@@ -130,3 +133,4 @@ set rf r v = case r of
                  SP  -> rf {_r13=v}
                  LR  -> rf {_r14=v}
                  PC  -> rf {_r15=v}
+                 None -> rf
