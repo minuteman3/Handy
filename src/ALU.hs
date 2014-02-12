@@ -10,43 +10,49 @@ import Data.Word (Word32, Word64)
 import Data.Bits
 
 compute :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
+compute i rf sr = (rf',sr'') where (rf',sr') = compute' i rf sr
+                                   sr'' = case getS i of
+                                            S   -> sr'
+                                            NoS -> sr
 
-compute (MOV cond dest src shft) rf sr = computeArith (const.id) dest arg arg cond sr' rf setSRarith1
+compute' :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
+
+compute' (MOV cond _ dest src shft) rf sr = computeArith (const.id) dest arg arg cond sr' rf setSRarith1
                                                 where arg = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src shft rf sr
 
-compute (MVN cond dest src shft) rf sr = computeArith (const.complement) dest arg arg cond sr' rf setSRarith1
+compute' (MVN cond _ dest src shft) rf sr = computeArith (const.complement) dest arg arg cond sr' rf setSRarith1
                                                 where arg = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src shft rf sr
 
-compute (MUL cond dest src1 src2) rf sr = computeArith (*) dest src1 src2 cond sr rf setSRarith1
+compute' (MUL cond _ dest src1 src2) rf sr = computeArith (*) dest src1 src2 cond sr rf setSRarith1
 
-compute (ADD cond dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg2 cond sr rf setSRarith2
+compute' (ADD cond _ dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg2 cond sr rf setSRarith2
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
-compute (SUB cond dest src1 src2 shft) rf sr = computeArith (-) dest src1 arg2 cond sr rf setSRarith3
+compute' (SUB cond _ dest src1 src2 shft) rf sr = computeArith (-) dest src1 arg2 cond sr rf setSRarith3
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
-compute (RSB cond dest src1 src2 shft) rf sr = computeArith (-) dest arg2 src1 cond sr rf setSRarith3
+compute' (RSB cond _ dest src1 src2 shft) rf sr = computeArith (-) dest arg2 src1 cond sr rf setSRarith3
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
-compute (CMP cond src1 src2 shft) rf sr = (rf,sr')
+compute' (CMP cond src1 src2 shft) rf sr = (rf,sr')
                                  where (_,sr') = computeArith (-) None src1 arg2 cond sr rf setSRarith3
                                        arg2 = (ArgC shiftresult)
                                        (shiftresult, _) = computeShift src2 shft rf sr
 
-compute (AND cond dest src1 src2 shft) rf sr = computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
+compute' (AND cond _ dest src1 src2 shft) rf sr = computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
 
-compute (ORR cond dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 arg2 cond sr' rf setSRarith1
+compute' (ORR cond _ dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
 
-compute (EOR cond dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
+compute' (EOR cond _ dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
 

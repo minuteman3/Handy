@@ -107,8 +107,8 @@ execute' (BX cond src) = do machine <- get
                             let sr = cpsr machine
                             let (ArgR dest) = src
                             when (checkCondition cond $ sr) $ do
-                                let (rf',_) = compute (AND cond Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
-                                let (rf'',_) = compute (SUB cond Reg.PC src (ArgC 4) NoShift) rf' sr
+                                let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
+                                let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
                                 put $ machine { registers = rf'' }
                                 modify $ flushPipeline
 
