@@ -9,48 +9,110 @@ import Handy.Util (bitmask)
 import Data.Word (Word8, Word16, Word32)
 import Data.Int (Int32)
 import Data.Bits
+import Control.Applicative
+import System.IO.Unsafe
 
-decode :: G.Get (Condition,Word8)
+
+decode :: G.Get Instruction
 decode = do condition <- G.lookAhead $ decodeCondition
             instruction_type <- G.lookAhead $ decodeInstructionType
             case instruction_type of
-              0 -> do return () -- Data processing immediate shift OR
-                                -- Miscellaneous Instruction OR
-                                -- Data processing register shift
+              0 -> do return JunkInstruction -- Data processing immediate shift OR
+                                             -- Miscellaneous Instruction OR
+                                             -- Data processing register shift
 
-              1 -> do return () -- Data processing immediate value OR
-                                -- Undefined instruction OR
-                                -- Move immediate to status register
+              1 -> do return JunkInstruction -- Data processing immediate value OR
+                                             -- Undefined instruction OR
+                                             -- Move immediate to status register
 
-              2 -> do return () -- Load/store immediate offset
+              2 -> do return JunkInstruction -- Load/store immediate offset
 
-              3 -> do return () -- Load/store register offset OR
-                                -- Media instruction OR
-                                -- Architecturally undefined
+              3 -> decodeType3 condition     -- Load/store register offset OR
+                                             -- Media instruction OR
+                                             -- Architecturally undefined
 
-              4 -> do return () -- Load/store multiple
+              4 -> do return JunkInstruction -- Load/store multiple
 
-              5 -> do return () -- Branch/Branch Link
+              5 -> decodeType5 condition     -- Branch/Branch Link
 
-              6 -> do return () -- Coprocessor load/store and double register transfers
+              6 -> do return JunkInstruction -- Coprocessor load/store and double register transfers
 
-              7 -> do return () -- Coprocessor data processing OR
-                                -- Coprocessor register transfers OR
-                                -- Software interrupt
-            return (condition,instruction_type)
+              7 -> do return JunkInstruction -- Coprocessor data processing OR
+                                             -- Coprocessor register transfers OR
+                                             -- Software interrupt
 
-{-decodeOpcode :: Word32 -> -}
-{-decodeS :: Word32 -> Maybe S-}
-{-decodeS word = if word `testBit` 20 then Just S else Just NoS-}
+decodeType3 :: Condition -> G.Get Instruction
+decodeType3 cond = (decodeDataImmediate cond) <|> decodeMSR <|> decodeUndefined
 
-{-getRegister :: Word32 -> Int -> Argument Register-}
-{-getRegister word at = toArgument $ toEnum $ fromIntegral $ (word `shiftR` at) .&. bitmask 4-}
+opcodeMask :: Word32
+opcodeMask = (bitmask 4) `shiftL` 21
 
-{-decodeRegisterDest :: Word32 -> Maybe (Argument Register)-}
-{-decodeRegisterDest word = Just $ getRegister word 16-}
+getOpcode :: G.Get Word8
+getOpcode = do word <- G.getWord32be
+               let opcode = word .&. opcodeMask
+               return $ fromIntegral $ (opcode `shiftR` 21)
 
-{-decodeRegisterSrc :: Word32 -> Maybe (Argument Register)-}
-{-decodeRegisterSrc word = Just $ getRegister word 16-}
+decodeS :: G.Get S
+decodeS = do word <- G.getWord32be
+             case word `testBit` 20 of
+                        True  -> return S
+                        False -> return NoS
+
+decodeDataImmediate :: Condition -> G.Get Instruction
+decodeDataImmediate cond = do (src2, NoShift) <- G.lookAhead decodeLiteral
+                              s <- G.lookAhead $ decodeS
+                              opcode <- G.lookAhead $ getOpcode
+                              src1 <- G.lookAhead $ decodeRegisterSrc
+                              dest <- G.lookAhead $ decodeRegisterDest
+                              case opcode of
+                                0 -> return $ AND cond s dest src1 src2 NoShift
+                                1 -> return $ EOR cond s dest src1 src2 NoShift
+                                2 -> return $ SUB cond s dest src1 src2 NoShift
+                                3 -> return $ RSB cond s dest src1 src2 NoShift
+                                4 -> return $ ADD cond s dest src1 src2 NoShift
+                                5 -> return $ JunkInstruction -- ADC cond s dest src1 src2 NoShift
+                                6 -> return $ JunkInstruction -- SBC cond s dest src1 src2 NoShift
+                                7 -> return $ JunkInstruction -- RSC cond s dest src1 src2 NoShift
+                                8 -> case s of
+                                       S -> return $ JunkInstruction -- TST cond src1 src2 NoShift
+                                       _ -> empty
+                                9 -> case s of
+                                       S -> return $ JunkInstruction -- TEQ cond src1 src2 NoShift
+                                       _ -> empty
+                                10 -> case s of
+                                       S -> return $ CMP cond src1 src2 NoShift
+                                       _ -> empty
+                                11 -> case s of
+                                       S -> return $ JunkInstruction -- CMN cond src1 src2 NoShift
+                                       _ -> empty
+                                12 -> return $ ORR cond s dest src1 src2 NoShift
+                                13 -> return $ MOV cond s dest src2 NoShift
+                                14 -> return $ JunkInstruction -- BIC cond s dest src1 src2 NoShift
+                                15 -> return $ MVN cond s dest src2 NoShift
+
+decodeMSR :: G.Get Instruction
+decodeMSR = empty
+
+decodeUndefined :: G.Get Instruction
+decodeUndefined = empty
+
+decodeType5 :: Condition -> G.Get Instruction
+decodeType5 cond = do word <- G.getWord32be
+                      let l = word `testBit` 24
+                          offset = toArgument $ fromIntegral $ word .&. bitmask 24
+                      if l then return $ BL cond offset else return $ B cond offset
+
+getRegister :: Word32 -> Int -> Argument Register
+getRegister word at = toArgument $ toEnum $ fromIntegral $ (word `shiftR` at) .&. bitmask 4
+
+decodeRegisterDest :: G.Get Register
+decodeRegisterDest = do word <- G.getWord32be
+                        let (ArgR dest) = getRegister word 12
+                        return dest
+
+decodeRegisterSrc :: G.Get (Argument Register)
+decodeRegisterSrc = do word <- G.getWord32be
+                       return $ getRegister word 16
 
 decodeCondition :: G.Get Condition
 decodeCondition = do byte <- G.getWord8
@@ -62,13 +124,14 @@ decodeInstructionType = do byte <- G.getWord8
                            let instruction_type = byte `shiftR` 1
                            return $ instruction_type .&. (fromIntegral $ bitmask 3)
 
-decodeLiteral :: Word32 -> G.Get (Maybe (Argument Constant, ShiftOp a))
-decodeLiteral word = do if word `testBit` 25 then do
-                            let immed_8 = word .&. bitmask 8
-                            let rotate_imm = fromIntegral $ (word `shiftR` 8) .&. bitmask 4
-                            let immediate = (fromIntegral $ immed_8 `rotateR` rotate_imm) :: Int32
-                            return $ Just (toArgument $ immediate, NoShift)
-                        else return Nothing
+decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
+decodeLiteral = do word <- G.getWord32be
+                   if word `testBit` 25 then do
+                      let immed_8 = word .&. bitmask 8
+                      let rotate_imm = fromIntegral $ (word `shiftR` 8) .&. bitmask 4
+                      let immediate = (fromIntegral $ immed_8 `rotateR` rotate_imm) :: Int32
+                      return $ (toArgument $ immediate, NoShift)
+                   else empty
 
 decodeShiftImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
 decodeShiftImm word = if word `testBit` 25 then
