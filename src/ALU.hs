@@ -163,7 +163,7 @@ computeRotateR val (ArgC shft) _ sr = case shft of
 
 computeRotateR val (ArgR shft) rf sr = (result, sr')
                                        where degree = fromIntegral $ rf `get` shft
-                                             degree' = fromIntegral $ degree .&. bitmask5
+                                             degree' = fromIntegral $ degree .&. bitmask 5
                                              result | degree  == 0 = val
                                                     | degree' >  0 = val `rotateR` degree'
                                              sr'    | degree  == 0 = sr

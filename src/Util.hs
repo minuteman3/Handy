@@ -3,17 +3,14 @@
 module Handy.Util where
 
 import Data.Int (Int32)
-import Data.Word (Word64)
+import Data.Word (Word32,Word64)
 import Data.Bits
 import Handy.Instructions
 import Handy.StatusRegister
 import Prelude hiding (EQ,GT,LT)
 
-bitmask24 :: Int32
-bitmask24 = complement $ (255 :: Int32) `rotateR` 8
-
-bitmask5  :: Int32
-bitmask5  = 2^5 - 1
+bitmask :: Int -> Word32
+bitmask i = 2^i - 1
 
 -- computeBranchOffset src := (SignExtend_30(signed_immed_24(src)) << 2)
 
@@ -21,11 +18,12 @@ bitmask5  = 2^5 - 1
 -- to the B and BL instructions.
 computeBranchOffset :: Argument Constant -> Argument Constant
 computeBranchOffset (ArgC val) = ArgC result
-                                 where src = bitmask24 .&. val
+                                 where src = (fromIntegral $ mask) .&. val
                                        se_src = if src `testBit` 23
-                                                then src .|. (complement bitmask24)
+                                                then src .|. (fromIntegral $ complement mask)
                                                 else src
                                        result = se_src `shiftL` 2
+                                       mask = bitmask 24
 
 isCarry :: Int32 -> Int32 -> Bool
 isCarry a b = result `testBit` 32

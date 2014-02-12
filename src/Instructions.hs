@@ -5,13 +5,26 @@ import Handy.Registers (Register,RegisterFile,get)
 import Data.Int (Int32)
 import Data.List (elem)
 import Prelude hiding (EQ,LT,GT)
+import qualified Data.Binary as B
+import Data.Bits
+import Data.Word (Word8)
 
 type Destination = Register
 type Constant = Int32
 
+class ArgVal a where
+    toArgument :: a -> Argument a
+
+instance ArgVal Int32 where
+    toArgument n = ArgC n
+
+instance ArgVal Register where
+    toArgument r = ArgR r
+
 data Argument a where
     ArgC :: Constant -> Argument Constant
     ArgR :: Register -> Argument Register
+    JunkArg :: Argument a
 
 instance Show (Argument a) where
     show (ArgC v) = "#" ++ (show v)
@@ -26,9 +39,7 @@ deriving instance Eq a => Eq (Argument a)
 data Condition = EQ -- Equal / equals zero  | Zero flag set
                | NE -- Not equal            | Zero flag clear
                | CS -- Carry set            | Carry flag set
-               | HS -- Unsigned higher/same | Carry flag set
                | CC -- Carry clear          | Carry flag clear
-               | LO -- Unsigned lower       | Carry flag clear
                | MI -- Minus/negative       | Negative flag set
                | PL -- Plus - postive/zero  | Negative flag clear
                | VS -- Overflow             | Overflow flag set
@@ -40,7 +51,10 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | GT -- Signed greater than  | Zero flag clear and Negative flag === Overflow flag
                | LE -- Signed less/equal    | Zero flag set or Negative flag !== Overflow flag
                | AL -- Always               | True
-               deriving Eq
+               | JunkCondition
+               | HS -- Unsigned higher/same | Carry flag set
+               | LO -- Unsigned lower       | Carry flag clear
+               deriving (Eq, Enum)
 
 instance Show Condition where
     show AL = ""
@@ -61,6 +75,13 @@ instance Show Condition where
     show GT = "GT"
     show LE = "LE"
 
+{-instance B.Binary Condition where-}
+    {-put EQ = B.put (0 :: Word8)-}
+    {-put NE = B.put (bit 5 :: Word8)-}
+    {-put CS = B.put (bit 6 :: Word8)-}
+    {-put HS = B.put CS-}
+    {-put CC = B.put ((bit 6 .|. bit 5) :: Word8)-}
+
 getCondition :: Instruction -> Condition
 getCondition (ADD c _ _ _ _ _) = c
 getCondition (SUB c _ _ _ _ _) = c
@@ -77,19 +98,20 @@ getCondition (BL c _)        = c
 getCondition (BX c _)        = c
 
 data ShiftOp a = LSL (Argument a) -- Logical shift left
-                | LSR (Argument a) -- Logical shift right
-                | ASR (Argument a) -- Arithmetic shift right
-                | ROR (Argument a) -- Rotate right
-                | RRX -- Rotate right + sign extend
-                | NoShift
-                deriving (Eq)
+               | LSR (Argument a) -- Logical shift right
+               | ASR (Argument a) -- Arithmetic shift right
+               | ROR (Argument a) -- Rotate right
+               | RRX -- Rotate right + sign extend
+               | NoShift
+               | JunkShiftOp
+               deriving (Eq)
 
 instance Show (ShiftOp a) where
-    show (LSL a) = ", LSL " ++ show a
-    show (LSR a) = ", LSR " ++ show a
-    show (ASR a) = ", ASR " ++ show a
-    show (ROR a) = ", ROR " ++ show a
-    show RRX     = ", RRX"
+    show (LSL a) = "LSL " ++ show a
+    show (LSR a) = "LSR " ++ show a
+    show (ASR a) = "ASR " ++ show a
+    show (ROR a) = "ROR " ++ show a
+    show RRX     = "RRX"
     show NoShift = ""
 
 {--
@@ -138,6 +160,7 @@ data Instruction where
     BL   :: Condition -> Argument Constant  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
     HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
+    JunkInstruction :: Instruction
 
 instance Show Instruction where
     show (ADD cond s dest src1 src2 shft) = "ADD" ++ stringify3aryOp cond s dest src1 src2 shft
@@ -148,11 +171,11 @@ instance Show Instruction where
     show (EOR cond s dest src1 src2 shft) = "EOR" ++ stringify3aryOp cond s dest src1 src2 shft
     show (MUL cond s dest src1 src2) = "MUL" ++ show cond ++ " " ++ show dest ++ ", "
                                            ++ show src1 ++ ", " ++ show src2
-    show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ show shft
+    show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (MOV cond s dest src1 shft) = "MOV" ++ show cond ++ show s ++ " " ++ show dest
-                                             ++ ", " ++ show src1 ++ show shft
+                                             ++ ", " ++ show src1 ++ ", " ++ show shft
     show (MVN cond s dest src1 shft) = "MVN" ++ show cond ++ show s ++ " " ++ show dest
-                                             ++ ", " ++ show src1 ++ show shft
+                                             ++ ", " ++ show src1 ++ ", " ++ show shft
     show (B cond src1)             = "B "  ++ show cond ++ " " ++ show src1
     show (BX cond src1)            = "BX " ++ show cond ++ " " ++ show src1
     show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
@@ -160,4 +183,4 @@ instance Show Instruction where
 
 stringify3aryOp :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
 stringify3aryOp cond s dest src1 src2 shft = show cond ++ show s ++ " " ++ show dest ++ ", " ++ show src1
-                                                       ++ ", " ++ show src2 ++ show shft
+                                                       ++ ", " ++ show src2 ++ ", " ++ show shft

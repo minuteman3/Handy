@@ -116,3 +116,7 @@ execute' i = do machine <- get
                 when (checkCondition (getCondition i) (cpsr machine)) $ do
                     let (rf,sr) = compute i (registers machine) (cpsr machine)
                     put $ machine { cpsr = sr, registers = rf }
+
+
+
+
