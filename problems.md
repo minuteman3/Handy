@@ -1,6 +1,6 @@
 #Outstanding Issues
 
-##CPSR
+##~~CPSR~~ DONE
 
 Computing the correct status flags after an instruction is not possible with the current implementation. Currently the result of a computation is inspected, from which the Z and N flags can be correctly set. The V and C flags require additional information about the operands, and the exact behaviour of the V and C flags depends on the particular instruction being executed.
 
