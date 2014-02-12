@@ -33,9 +33,10 @@ compute (RSB cond dest src1 src2 shft) rf sr = computeArith (-) dest arg2 src1 c
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
-compute (CMP cond src1 src2 shft) rf sr = computeArith (-) None src1 arg2 cond sr rf setSRarith3
-                                                where arg2 = (ArgC shiftresult)
-                                                      (shiftresult, _) = computeShift src2 shft rf sr
+compute (CMP cond src1 src2 shft) rf sr = (rf,sr')
+                                 where (_,sr') = computeArith (-) None src1 arg2 cond sr rf setSRarith3
+                                       arg2 = (ArgC shiftresult)
+                                       (shiftresult, _) = computeShift src2 shft rf sr
 
 compute (AND cond dest src1 src2 shft) rf sr = computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
@@ -48,6 +49,11 @@ compute (ORR cond dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 arg2
 compute (EOR cond dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
+
+computeBranch src cond rf sr = (branch,sr) where
+                               offset = src `eval` rf
+                               offset' = computeBranchOffset (ArgC offset)
+                               (branch,_) = computeArith (+) PC (ArgR PC) offset' cond sr rf setSRarith2
 
 computeArith :: (Int32 -> Int32 -> Int32)
               -> Destination

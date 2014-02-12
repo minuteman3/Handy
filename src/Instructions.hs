@@ -85,6 +85,22 @@ instance Show (ShiftOp a) where
                                      ADD :: Condition -> UpdateFlag -> Dest...
  --}
 
+getCondition :: Instruction -> Condition
+getCondition (ADD c _ _ _ _) = c
+getCondition (SUB c _ _ _ _) = c
+getCondition (RSB c _ _ _ _) = c
+getCondition (AND c _ _ _ _) = c
+getCondition (ORR c _ _ _ _) = c
+getCondition (EOR c _ _ _ _) = c
+getCondition (MUL c _ _ _)   = c
+getCondition (CMP c _ _ _)   = c
+getCondition (MOV c _ _ _)   = c
+getCondition (MVN c _ _ _)   = c
+getCondition (B  c _)        = c
+getCondition (BL c _)        = c
+getCondition (BX c _)        = c
+
+
 data Instruction where
     ADD  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     SUB  :: Condition -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction

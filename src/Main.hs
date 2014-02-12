@@ -18,10 +18,11 @@ testProg1 = [MOV AL R0 (ArgC 10) NoShift,
              SUB AL R0 (ArgR R0) (ArgC 11) NoShift,
              HALT]
 
-testProg2 = [MOV AL R0 (ArgC 2) NoShift,
+testProg2 = [MOV AL R0 (ArgC 8) NoShift,
              MOV AL R1 (ArgC 1) NoShift,
              ADD AL R1 (ArgR R1) (ArgC 1) NoShift,
              CMP AL (ArgR R1) (ArgC 10) NoShift,
+             {-BX NE (ArgR R0),-}
              BL NE (ArgC $ negate 5),
              HALT]
 -- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff

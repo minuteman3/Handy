@@ -37,6 +37,7 @@ run = do
         modify pipeline
         i <- gets executeR
         execute i
+        machine <- get
         modify incPC
         run
 
@@ -47,6 +48,7 @@ run = do
     decoder with type Word32 -> Instruction that gets applied to the contents of
     decodeR as they move into executeR
 -}
+
 pipeline :: Machine -> Machine
 pipeline machine = machine { fetchR   = nextInstruction machine
                            , decodeR  = fetchR machine
@@ -65,11 +67,15 @@ flushPipeline machine = machine { fetchR   = Nothing
     implementation of memory as a list of instructions. Later on this function
     should be simplified a lot by just being a call to the memory.
 -}
+
 nextInstruction :: Machine -> Maybe Instruction
 nextInstruction machine = let pc = fromIntegral $ (registers machine) `Reg.get` Reg.PC in
                              if pc <= (4 * length (memory machine)) - 1  then
                                 Just $ (memory machine) !! (pc `div` 4)
                              else Nothing
+
+setRegister :: Reg.Register -> Int32 -> Machine -> Machine
+setRegister r v machine = machine { registers = Reg.set (registers machine) r v }
 
 incPC :: Machine -> Machine
 incPC machine = let pc = (registers machine) `Reg.get` Reg.PC in
@@ -80,29 +86,13 @@ execute Nothing = return ()
 execute (Just i) = execute' i
 
 execute' :: Instruction -> Run ()
-execute' HALT = state $ (\machine -> ((),machine { executing = False }))
-execute' (MOV cond dest src shft)       = executeUnOp id cond dest src shft
-execute' (MVN cond dest src shft)       = executeUnOp complement cond dest src shft
-execute' (ADD cond dest src1 src2 shft) = executeBinOp (+) cond dest src1 src2 shft
-execute' (SUB cond dest src1 src2 shft) = executeBinOp (-) cond dest src1 src2 shft
-execute' (RSB cond dest src1 src2 shft) = executeBinOp (-) cond dest src2 src1 shft
-execute' (AND cond dest src1 src2 shft) = executeBinOp (.&.) cond dest src2 src1 shft
-execute' (ORR cond dest src1 src2 shft) = executeBinOp (.|.) cond dest src2 src1 shft
-execute' (EOR cond dest src1 src2 shft) = executeBinOp xor cond dest src2 src1 shft
-execute' (MUL cond dest src1 src2)      = executeBinOp (*) cond dest src1 src2 NoShift
 
-execute' (CMP cond src1 src2 shft) = do machine <- get
-                                        let sr = (cpsr machine)
-                                        when (checkCondition cond $ cpsr machine) $ do
-                                             let result = computeBinOp (-) src1 src2 (registers machine) shft
-                                             let cpsr' = setCPSR result sr
-                                             put $ machine { cpsr = cpsr' }
+execute' HALT = state $ (\machine -> ((),machine { executing = False }))
 
 execute' (B cond src) = do machine <- get
-                           let rf = registers machine
                            when (checkCondition cond $ cpsr machine) $ do
-                               let offset = computeBranchOffset src
-                               executeBinOp (+) cond Reg.PC (ArgR Reg.PC) offset NoShift
+                               let (rf,_) = computeBranch src cond (registers machine) (cpsr machine)
+                               put $ machine { registers = rf }
                                modify $ flushPipeline
 
 
@@ -113,49 +103,17 @@ execute' (BL cond src) = do machine <- get
                                 modify $ setRegister Reg.LR link
                             execute' (B cond src)
 
-execute' (BX cond src) = executeUnOp (.&. 0xFFFFFFFE) cond Reg.PC src NoShift
+execute' (BX cond src) = do machine <- get
+                            let rf = registers machine
+                            let sr = cpsr machine
+                            let (ArgR dest) = src
+                            when (checkCondition cond $ sr) $ do
+                                let (rf',_) = compute (AND cond Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
+                                let (rf'',_) = compute (SUB cond Reg.PC src (ArgC 4) NoShift) rf' sr
+                                put $ machine { registers = rf'' }
+                                modify $ flushPipeline
 
-executeUnOp :: (Int32 -> Int32) -> Condition -> Destination -> Argument a -> ShiftOp b -> Run ()
-executeUnOp op cond dest src shft = do machine <- get
-                                       when (checkCondition cond $ cpsr machine) $ do
-                                            let result = computeUnOp op src (registers machine) shft
-                                            modify $ setRegister dest result
-
-executeBinOp :: (Int32 -> Int32 -> Int32)
-             -> Condition
-             -> Destination
-             -> Argument a
-             -> Argument b
-             -> ShiftOp c
-             -> Run ()
-
-executeBinOp op cond dest src1 src2 shft = do machine <- get
-                                              let rf = registers machine
-                                              when (checkCondition cond $ cpsr machine) $ do
-                                                   let result = computeBinOp op src1 src2 rf shft
-                                                   modify $ setRegister dest result
-
-
-
-computeUnOp :: (Int32 -> Int32) -> Argument a -> Reg.RegisterFile -> ShiftOp b -> Int32
-computeUnOp op src rf shft = op v'
-                             where v  = src `eval` rf
-                                   v' = fromIntegral $ computeShift v shft rf
-
-computeBinOp :: (Int32 -> Int32 -> Int32) -> Argument a -> Argument b -> Reg.RegisterFile -> ShiftOp c -> Int32
-computeBinOp op src1 src2 rf shft = result
-                                    where va  = src1 `eval` rf
-                                          vb  = src2 `eval` rf
-                                          vb' = computeShift vb shft rf
-                                          result = va `op` vb'
-
-setCPSR :: Int32 -> StatusRegister -> StatusRegister
-setCPSR result cpsr = cpsr { negative = testBit result 31
-                           , zero     = result == 0
-                           -- TODO: Overflow and Carry flag implementation
-                           }
-
-
-
-setRegister :: Reg.Register -> Int32 -> Machine -> Machine
-setRegister r v machine = machine { registers = Reg.set (registers machine) r v }
+execute' i = do machine <- get
+                when (checkCondition (getCondition i) (cpsr machine)) $ do
+                    let (rf,sr) = compute i (registers machine) (cpsr machine)
+                    put $ machine { cpsr = sr, registers = rf }
