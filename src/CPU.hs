@@ -11,7 +11,6 @@ import Handy.Util (computeBranchOffset, checkCondition)
 import qualified Handy.Registers as Reg
 
 import Control.Monad.State
-import System.IO.Unsafe (unsafePerformIO)
 import Data.Int (Int32)
 import Data.Word (Word32)
 import Data.Bits
