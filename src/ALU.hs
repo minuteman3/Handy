@@ -1,3 +1,4 @@
+{-# Language GADTs #-}
 module Handy.ALU where
 
 import Handy.Instructions
@@ -10,16 +11,34 @@ import Data.Bits
 
 compute :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
 
-compute (MOV cond dest src shft) rf cpsr = computeArith (const.id) dest src src cond cpsr rf setSRarith1
-compute (MVN cond dest src shft) rf cpsr = computeArith (const.complement) dest src src cond cpsr rf setSRarith1
-compute (MUL cond dest src1 src2) rf cpsr = computeArith (*) dest src1 src2 cond cpsr rf setSRarith1
-compute (ADD cond dest src1 src2 shft) rf cpsr = computeArith (+) dest src1 src2 cond cpsr rf setSRarith2
-compute (SUB cond dest src1 src2 shft) rf cpsr = computeArith (-) dest src1 src2 cond cpsr rf setSRarith3
-compute (RSB cond dest src1 src2 shft) rf cpsr = computeArith (-) dest src2 src1 cond cpsr rf setSRarith3
-compute (CMP cond src1 src2 shft) rf cpsr = computeArith (-) None src1 src2 cond cpsr rf setSRarith3
-compute (AND cond dest src1 src2 shft) rf cpsr = computeArith (.&.) dest src1 src2 cond cpsr rf setSRarith1
-compute (ORR cond dest src1 src2 shft) rf cpsr = computeArith (.|.) dest src1 src2 cond cpsr rf setSRarith1
-compute (EOR cond dest src1 src2 shft) rf cpsr = computeArith (xor) dest src1 src2 cond cpsr rf setSRarith1
+compute (MOV cond dest src shft) rf sr = computeArith (const.id) dest arg arg cond sr' rf setSRarith1
+                                                where arg = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src shft rf sr
+compute (MVN cond dest src shft) rf sr = computeArith (const.complement) dest arg arg cond sr' rf setSRarith1
+                                                where arg = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src shft rf sr
+compute (MUL cond dest src1 src2) rf sr = computeArith (*) dest src1 src2 cond sr rf setSRarith1
+compute (ADD cond dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg2 cond sr' rf setSRarith2
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (SUB cond dest src1 src2 shft) rf sr = computeArith (-) dest src1 arg2 cond sr' rf setSRarith3
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (RSB cond dest src1 src2 shft) rf sr = computeArith (-) dest arg2 src1 cond sr' rf setSRarith3
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (CMP cond src1 src2 shft) rf sr = computeArith (-) None src1 arg2 cond sr' rf setSRarith3
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (AND cond dest src1 src2 shft) rf sr = computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (ORR cond dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 arg2 cond sr' rf setSRarith1
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+compute (EOR cond dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
 
 computeArith :: (Int32 -> Int32 -> Int32)
               -> Destination
@@ -58,17 +77,75 @@ setSRarith3 a b result sr = sr { carry    = isCarry a (negate b)
                                , negative = result `testBit` 31
                                }
 
-computeShift :: Int32 -> ShiftOp a -> RegisterFile -> Int32
-computeShift val (NoShift) _ = val
-computeShift val (RRX) _ = undefined
-computeShift val (LSL shft) rf = computeShift' shiftL val shft rf
-computeShift val (ASR shft) rf = computeShift' shiftR val shft rf
-computeShift val (ROR shft) rf = computeShift' rotateR val shft rf
-computeShift val (LSR shft) rf = result where result  = fromIntegral $ val' `shiftR` degree'
-                                              degree  = fromIntegral $ shft `eval` rf
-                                              val'    = (fromIntegral val) :: Word32
-                                              degree' = if degree == 0 then 32 else degree
+computeShift :: Argument a -> ShiftOp b -> RegisterFile -> StatusRegister -> (Int32, StatusRegister)
+computeShift val NoShift rf sr = (val `eval` rf, sr)
+computeShift val (RRX) rf sr = computeRotateR (val `eval` rf) (ArgC 0) rf sr
+computeShift val (LSL shft) rf sr = computeShiftL (val `eval` rf) shft rf sr
+computeShift val (ROR shft) rf sr = computeRotateR (val `eval` rf) shft rf sr
+computeShift val (ASR shft) rf sr = computeShiftR (val `eval` rf) shft rf sr
+computeShift val (LSR shft) rf sr = (fromIntegral result, sr') where
+                        (result, sr') = computeShiftR (fromIntegral $ (val `eval` rf) :: Word32) shft rf sr
 
-computeShift' :: (Num a, Bits a) => (a -> Int -> a) -> a -> Argument b -> RegisterFile -> a
-computeShift' op val shft rf = result where result = val `op` degree
-                                            degree = fromIntegral $ shft `eval` rf
+
+computeShiftL :: (Num a, Bits a)
+              => a
+              -> Argument b
+              -> RegisterFile
+              -> StatusRegister
+              -> (a, StatusRegister)
+
+computeShiftL val shft rf sr = (result, sr')
+                               where result = val `shiftL` degree
+                                     degree = fromIntegral $ shft `eval` rf
+                                     sr' | degree == 0 = sr
+                                         | degree <= 32 = sr { carry = val `testBit` (32 - degree) }
+                                         | otherwise = sr { carry = False }
+
+computeShiftR :: (Num a, Bits a)
+              => a
+              -> Argument b
+              -> RegisterFile
+              -> StatusRegister
+              -> (a, StatusRegister)
+
+computeShiftR val (ArgC shft) _  sr = (result, sr')
+                                      where degree = fromIntegral shft :: Int
+                                            result | degree == 0 = 0
+                                                   | otherwise = val `shiftL` degree
+                                            sr'    | degree == 0 = sr { carry = val `testBit` 31 }
+                                                   | otherwise = sr { carry = val `testBit` (degree - 1) }
+
+computeShiftR val (ArgR shft) rf sr = (result, sr')
+                                      where result = val `shiftR` degree
+                                            degree = fromIntegral $ rf `get` shft
+                                            sr' | degree == 0 = sr
+                                                | degree <= 32 = sr { carry = val `testBit` (degree - 1) }
+                                                | degree > 32 = sr { carry = False }
+
+computeRotateR :: (Num a, Bits a)
+               => a
+               -> Argument b
+               -> RegisterFile
+               -> StatusRegister
+               -> (a, StatusRegister)
+
+computeRotateR val (ArgC shft) _ sr = case shft of
+                                        0 -> (result, sr') where
+                                             c | carry sr  = bit 31
+                                               | otherwise = 0
+                                             result = c .|. (val `shiftR` 1)
+                                             sr' = sr { carry = val `testBit` 0 }
+                                        _ -> (result, sr') where
+                                             degree = fromIntegral shft :: Int
+                                             result = val `rotateR` degree
+                                             sr'    = sr { carry = val `testBit` (degree - 1) }
+
+computeRotateR val (ArgR shft) rf sr = (result, sr')
+                                       where degree = fromIntegral $ rf `get` shft
+                                             degree' = fromIntegral $ degree .&. bitmask5
+                                             result | degree  == 0 = val
+                                                    | degree' >  0 = val `rotateR` degree'
+                                             sr'    | degree  == 0 = sr
+                                                    | degree' == 0 = sr { carry = val `testBit` 31 }
+                                                    | degree' >  0 = sr { carry = val `testBit` (degree' - 1) }
+

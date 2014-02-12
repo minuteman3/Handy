@@ -12,6 +12,9 @@ import Prelude hiding (EQ,GT,LT)
 bitmask24 :: Int32
 bitmask24 = complement $ (255 :: Int32) `rotateR` 8
 
+bitmask5  :: Int32
+bitmask5  = 2^5 - 1
+
 -- computeBranchOffset src := (SignExtend_30(signed_immed_24(src)) << 2)
 
 -- This is semantically consistent with the ISA defined behaviour for arguments
