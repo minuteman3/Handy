@@ -123,24 +123,24 @@ makeInstruction opcode cond s dest src1 src2 shft = case opcode of
                                 2 -> return $ SUB cond s dest src1 src2 shft
                                 3 -> return $ RSB cond s dest src1 src2 shft
                                 4 -> return $ ADD cond s dest src1 src2 shft
-                                5 -> return $ JunkInstruction -- ADC cond s dest src1 src2 shft
-                                6 -> return $ JunkInstruction -- SBC cond s dest src1 src2 shft
-                                7 -> return $ JunkInstruction -- RSC cond s dest src1 src2 shft
+                                5 -> return $ ADC cond s dest src1 src2 shft
+                                6 -> return $ SBC cond s dest src1 src2 shft
+                                7 -> return $ RSC cond s dest src1 src2 shft
                                 8 -> case s of
-                                       S -> return $ JunkInstruction -- TST cond src1 src2 shft
+                                       S -> return $ TST cond src1 src2 shft
                                        _ -> empty
                                 9 -> case s of
-                                       S -> return $ JunkInstruction -- TEQ cond src1 src2 shft
+                                       S -> return $ TEQ cond src1 src2 shft
                                        _ -> empty
                                 10 -> case s of
                                        S -> return $ CMP cond src1 src2 shft
                                        _ -> empty
                                 11 -> case s of
-                                       S -> return $ JunkInstruction -- CMN cond src1 src2 shft
+                                       S -> return $ CMN cond src1 src2 shft
                                        _ -> empty
                                 12 -> return $ ORR cond s dest src1 src2 shft
                                 13 -> return $ MOV cond s dest src2 shft
-                                14 -> return $ JunkInstruction -- BIC cond s dest src1 src2 shft
+                                14 -> return $ BIC cond s dest src1 src2 shft
                                 15 -> return $ MVN cond s dest src2 shft
 
 decodeMSR :: G.Get Instruction

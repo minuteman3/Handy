@@ -119,14 +119,6 @@ instance Show (ShiftOp a) where
     show RRX     = "RRX"
     show NoShift = ""
 
-{--
-    TODO: Add `S` flag to instructions
-
-          Either need to create: duplicate instructions, eg. ADD/ADDS, SUB/SUBS
-                                 add another argument to data constructors, eg.
-                                     ADD :: Condition -> UpdateFlag -> Dest...
- --}
-
 data S = NoS
        | S
        deriving (Eq, Enum)
@@ -157,8 +149,15 @@ data Instruction where
     AND  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     ORR  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     EOR  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    BIC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    ADC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    SBC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    RSC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     MUL  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
     CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    TST  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    TEQ  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    CMN  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     MOV  :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
     MVN  :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
     B    :: Condition -> Argument Constant  -> Instruction
