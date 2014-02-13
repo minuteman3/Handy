@@ -16,18 +16,18 @@ import System.IO.Unsafe
 decode :: G.Get Instruction
 decode = do condition <- G.lookAhead $ decodeCondition
             instruction_type <- G.lookAhead $ decodeInstructionType
-            case instruction_type of
-              0 -> do return JunkInstruction -- Data processing immediate shift OR
+            case (unsafePerformIO $ print $ show instruction_type) `seq` instruction_type of
+              0 -> decodeType0 condition     -- Data processing immediate shift OR
                                              -- Miscellaneous Instruction OR
                                              -- Data processing register shift
 
-              1 -> do return JunkInstruction -- Data processing immediate value OR
+              1 -> decodeType1 condition     -- Data processing immediate value OR
                                              -- Undefined instruction OR
                                              -- Move immediate to status register
 
               2 -> do return JunkInstruction -- Load/store immediate offset
 
-              3 -> decodeType3 condition     -- Load/store register offset OR
+              3 -> do return JunkInstruction -- Load/store register offset OR
                                              -- Media instruction OR
                                              -- Architecturally undefined
 
@@ -41,8 +41,27 @@ decode = do condition <- G.lookAhead $ decodeCondition
                                              -- Coprocessor register transfers OR
                                              -- Software interrupt
 
-decodeType3 :: Condition -> G.Get Instruction
-decodeType3 cond = (decodeDataImmediate cond) <|> decodeMSR <|> decodeUndefined
+decodeType0 :: Condition -> G.Get Instruction
+decodeType0 cond = (G.lookAhead $ (decodeDataOp cond decodeDataShiftImm))
+                <|> decodeMisc
+                <|> (G.lookAhead $ (decodeDataOp cond decodeDataShiftReg))
+                <|> empty
+
+decodeDataOp :: (ArgVal a, ArgVal b, Arg a, Arg b) => Condition -> G.Get (Argument a, ShiftOp b) -> G.Get Instruction
+decodeDataOp cond parser = do (src2, shft) <- G.lookAhead $ parser
+                              s <- (unsafePerformIO $ print $ show src2) `seq` G.lookAhead $ decodeS
+                              opcode <- G.lookAhead $ getOpcode
+                              src1 <- G.lookAhead $ decodeRegisterSrc
+                              dest <- G.lookAhead $ decodeRegisterDest
+                              makeInstruction opcode cond s dest src1 src2 shft
+
+
+
+decodeMisc = empty
+
+
+decodeType1 :: Condition -> G.Get Instruction
+decodeType1 cond = (decodeDataImmediate cond) <|> decodeMSR <|> decodeUndefined <|> empty
 
 opcodeMask :: Word32
 opcodeMask = (bitmask 4) `shiftL` 21
@@ -59,36 +78,47 @@ decodeS = do word <- G.getWord32be
                         False -> return NoS
 
 decodeDataImmediate :: Condition -> G.Get Instruction
-decodeDataImmediate cond = do (src2, NoShift) <- G.lookAhead decodeLiteral
+decodeDataImmediate cond = do (src2, shft) <- G.lookAhead decodeLiteral
                               s <- G.lookAhead $ decodeS
                               opcode <- G.lookAhead $ getOpcode
                               src1 <- G.lookAhead $ decodeRegisterSrc
                               dest <- G.lookAhead $ decodeRegisterDest
-                              case opcode of
-                                0 -> return $ AND cond s dest src1 src2 NoShift
-                                1 -> return $ EOR cond s dest src1 src2 NoShift
-                                2 -> return $ SUB cond s dest src1 src2 NoShift
-                                3 -> return $ RSB cond s dest src1 src2 NoShift
-                                4 -> return $ ADD cond s dest src1 src2 NoShift
-                                5 -> return $ JunkInstruction -- ADC cond s dest src1 src2 NoShift
-                                6 -> return $ JunkInstruction -- SBC cond s dest src1 src2 NoShift
-                                7 -> return $ JunkInstruction -- RSC cond s dest src1 src2 NoShift
+                              makeInstruction opcode cond s dest src1 src2 shft
+
+makeInstruction :: Word8
+                -> Condition
+                -> S
+                -> Destination
+                -> Argument Register
+                -> Argument a
+                -> ShiftOp b
+                -> G.Get Instruction
+
+makeInstruction opcode cond s dest src1 src2 shft = case opcode of
+                                0 -> return $ AND cond s dest src1 src2 shft
+                                1 -> return $ EOR cond s dest src1 src2 shft
+                                2 -> return $ SUB cond s dest src1 src2 shft
+                                3 -> return $ RSB cond s dest src1 src2 shft
+                                4 -> return $ ADD cond s dest src1 src2 shft
+                                5 -> return $ JunkInstruction -- ADC cond s dest src1 src2 shft
+                                6 -> return $ JunkInstruction -- SBC cond s dest src1 src2 shft
+                                7 -> return $ JunkInstruction -- RSC cond s dest src1 src2 shft
                                 8 -> case s of
-                                       S -> return $ JunkInstruction -- TST cond src1 src2 NoShift
+                                       S -> return $ JunkInstruction -- TST cond src1 src2 shft
                                        _ -> empty
                                 9 -> case s of
-                                       S -> return $ JunkInstruction -- TEQ cond src1 src2 NoShift
+                                       S -> return $ JunkInstruction -- TEQ cond src1 src2 shft
                                        _ -> empty
                                 10 -> case s of
-                                       S -> return $ CMP cond src1 src2 NoShift
+                                       S -> return $ CMP cond src1 src2 shft
                                        _ -> empty
                                 11 -> case s of
-                                       S -> return $ JunkInstruction -- CMN cond src1 src2 NoShift
+                                       S -> return $ JunkInstruction -- CMN cond src1 src2 shft
                                        _ -> empty
-                                12 -> return $ ORR cond s dest src1 src2 NoShift
-                                13 -> return $ MOV cond s dest src2 NoShift
-                                14 -> return $ JunkInstruction -- BIC cond s dest src1 src2 NoShift
-                                15 -> return $ MVN cond s dest src2 NoShift
+                                12 -> return $ ORR cond s dest src1 src2 shft
+                                13 -> return $ MOV cond s dest src2 shft
+                                14 -> return $ JunkInstruction -- BIC cond s dest src1 src2 shft
+                                15 -> return $ MVN cond s dest src2 shft
 
 decodeMSR :: G.Get Instruction
 decodeMSR = empty
@@ -126,8 +156,17 @@ decodeInstructionType = do byte <- G.getWord8
 
 decodeDataProcessing = decodeLiteral <|> empty
 
-decodeDataShiftImm = decodeShiftImm <|> decodeShiftRImm <|> empty
-decodeDataShiftReg = decodeShiftLReg <|> decodeShiftRReg <|> empty
+decodeDataShiftImm = do word <- G.lookAhead $ G.getWord32be
+                        if word `testBit` 4 then
+                            empty
+                        else
+                            decodeShiftLImm <|> decodeShiftRImm <|> decodeShiftAImm <|> decodeRotateImm <|> empty
+
+decodeDataShiftReg = do word <- G.lookAhead $ G.getWord32be
+                        if word `testBit` 7 then
+                            empty
+                        else
+                            decodeShiftLReg <|> decodeShiftRReg <|> decodeShiftAReg <|> decodeRotateReg <|> empty
 
 decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
 decodeLiteral = do word <- G.getWord32be
@@ -138,75 +177,76 @@ decodeLiteral = do word <- G.getWord32be
                       return $ (toArgument $ immediate, NoShift)
                    else empty
 
-decodeShiftImm :: G.Get (Argument Register, ShiftOp Constant)
-decodeShiftImm = do word <- G.getWord32be
-                    if word `testBit` 25 then empty
-                    else if word `testBit` 4 then empty
-                    else do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                            let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                            return $ (register, LSL shift)
 
 decodeShiftLReg :: G.Get (Argument Register, ShiftOp Register)
 decodeShiftLReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 4 then
-                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                           let shift = (word `shiftR` 8) .&. bitmask 4
-                           let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
+                     else if word `testBit` 4 && (not $ word `testBit` 7) then
+                        do let register = word `getRegister` 0
+                           let shift_reg = word `getRegister` 8
                            return $ (register, LSL shift_reg)
-                     else empty
-
-decodeShiftRImm :: G.Get (Argument Register, ShiftOp Constant)
-decodeShiftRImm = do word <- G.getWord32be
-                     if word `testBit` 25 then empty
-                     else if word `testBit` 5 then
-                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                           let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                           return $ (register, LSR shift)
                      else empty
 
 decodeShiftRReg :: G.Get (Argument Register, ShiftOp Register)
 decodeShiftRReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
                      else if word `testBit` 5 && word `testBit` 4 then
-                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                           let shift = (word `shiftR` 8) .&. bitmask 4
-                           let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
+                        do let register = word `getRegister` 0
+                           let shift_reg = word `getRegister` 8
                            return $ (register, LSR shift_reg)
                      else empty
 
-decodeShiftAImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
-decodeShiftAImm word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 6 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
+decodeShiftAReg :: G.Get (Argument Register, ShiftOp Register)
+decodeShiftAReg = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 6 && word `testBit` 4 then
+                        do let register = word `getRegister` 0
+                           let shift_reg = word `getRegister` 8
+                           return $ (register, ASR shift_reg)
+                     else empty
+
+decodeRotateReg :: G.Get (Argument Register, ShiftOp Register)
+decodeRotateReg = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 6 && word `testBit` 5 && word `testBit` 4 then
+                        do let register = word `getRegister` 0
+                           let shift_reg = word `getRegister` 8
+                           return $ (register, ROR shift_reg)
+                     else empty
+
+decodeShiftLImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeShiftLImm = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 4 then empty
+                     else do let register = word `getRegister` 0
                              let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                             return $ Just (register, ASR shift)
-                       else return Nothing
+                             return $ (register, LSL shift)
 
-decodeShiftAReg :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Register))
-decodeShiftAReg word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 6 && word `testBit` 4 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                             let shift = (word `shiftR` 8) .&. bitmask 4
-                             let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
-                             return $ Just (register, ASR shift_reg)
-                       else return Nothing
+decodeShiftRImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeShiftRImm = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 5 then
+                        do let register = word `getRegister` 0
+                           let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
+                           return $ (register, LSR shift)
+                     else empty
 
-decodeRotateImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
-decodeRotateImm word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 6 && word `testBit` 5 then
-                         do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                            let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                            case shift of
-                              ArgC 0 -> return $ Just (register, RRX)
-                              _ -> return $ Just (register, ROR shift)
-                       else return Nothing
+decodeShiftAImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeShiftAImm = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 6 then
+                        do let register = word `getRegister` 0
+                           let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
+                           return $ (register, ASR shift)
+                     else empty
 
-decodeRotateReg :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
-decodeRotateReg word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 6 && word `testBit` 5 && word `testBit` 4 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                             let shift = (word `shiftR` 8) .&. bitmask 4
-                             let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
-                             return $ Just (register, ROR shift_reg)
-                       else return Nothing
+decodeRotateImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeRotateImm = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 6 && word `testBit` 5 then
+                       do let register = word `getRegister` 0
+                          let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
+                          case shift of
+                            ArgC 0 -> return $ (register, RRX)
+                            _ -> return $ (register, ROR shift)
+                     else empty
