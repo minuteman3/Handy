@@ -19,7 +19,9 @@ decode = do condition <- G.lookAhead $ decodeCondition
             case (unsafePerformIO $ print $ show instruction_type) `seq` instruction_type of
               0 -> decodeType0 condition     -- Data processing immediate shift OR
                                              -- Miscellaneous Instruction OR
-                                             -- Data processing register shift
+                                             -- Data processing register shift OR
+                                             -- Multiplies OR
+                                             -- Extra Load Stores OR
 
               1 -> decodeType1 condition     -- Data processing immediate value OR
                                              -- Undefined instruction OR
@@ -42,10 +44,31 @@ decode = do condition <- G.lookAhead $ decodeCondition
                                              -- Software interrupt
 
 decodeType0 :: Condition -> G.Get Instruction
-decodeType0 cond = (G.lookAhead $ (decodeDataOp cond decodeDataShiftImm))
+decodeType0 cond = (decodeDataOp cond decodeDataShiftImm)
+                <|> (decodeMul cond)
                 <|> decodeMisc
-                <|> (G.lookAhead $ (decodeDataOp cond decodeDataShiftReg))
+                <|> (decodeDataOp cond decodeDataShiftReg)
                 <|> empty
+
+
+mulMask :: Word32
+mulMask = bit 27 .|. bit 26 .|. bit 25 .|. bit 24 .|. bit 23 .|. bit 22 .|. bit 21 .|. bit 7 .|. bit 4
+
+isMul :: Word32 -> Bool
+isMul word = (word .&. mulMask) == (bit 7 .|. bit 4)
+
+decodeMul :: Condition -> G.Get Instruction
+decodeMul cond = do word <- G.lookAhead $ G.getWord32be
+                    if isMul word then do
+                        s <- G.lookAhead $ decodeS
+                        let src1 = getRegister word 0
+                            src2 = getRegister word 8
+                            (ArgR dest) = getRegister word 16
+                        return $ MUL cond s dest src1 src2
+                    else
+                        empty
+
+
 
 decodeDataOp :: (ArgVal a, ArgVal b, Arg a, Arg b) => Condition -> G.Get (Argument a, ShiftOp b) -> G.Get Instruction
 decodeDataOp cond parser = do (src2, shft) <- G.lookAhead $ parser
@@ -154,7 +177,8 @@ decodeInstructionType = do byte <- G.getWord8
                            let instruction_type = byte `shiftR` 1
                            return $ instruction_type .&. (fromIntegral $ bitmask 3)
 
-decodeDataProcessing = decodeLiteral <|> empty
+decodeDataLiteral = do word <- G.lookAhead $ G.getWord32be
+                       if isDataProc word then decodeLiteral <|> empty else empty
 
 decodeDataShiftImm = do word <- G.lookAhead $ G.getWord32be
                         if word `testBit` 4 then
@@ -163,10 +187,16 @@ decodeDataShiftImm = do word <- G.lookAhead $ G.getWord32be
                             decodeShiftLImm <|> decodeShiftRImm <|> decodeShiftAImm <|> decodeRotateImm <|> empty
 
 decodeDataShiftReg = do word <- G.lookAhead $ G.getWord32be
-                        if word `testBit` 7 then
+                        if word `testBit` 7 || (not $ isDataProc word) then
                             empty
                         else
                             decodeShiftLReg <|> decodeShiftRReg <|> decodeShiftAReg <|> decodeRotateReg <|> empty
+
+dataProcMask :: Word32
+dataProcMask = bit 24 .|. bit 23 .|. bit 20
+
+isDataProc :: Word32 -> Bool
+isDataProc word = (word .&. dataProcMask) /= 0
 
 decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
 decodeLiteral = do word <- G.getWord32be
