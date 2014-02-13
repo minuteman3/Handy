@@ -3,11 +3,7 @@
 module Handy.Instructions where
 import Handy.Registers (Register,RegisterFile,get)
 import Data.Int (Int32)
-import Data.List (elem)
 import Prelude hiding (EQ,LT,GT)
-import qualified Data.Binary as B
-import Data.Bits
-import Data.Word (Word8)
 
 type Destination = Register
 type Constant = Int32
@@ -79,13 +75,6 @@ instance Show Condition where
     show LT = "LT"
     show GT = "GT"
     show LE = "LE"
-
-{-instance B.Binary Condition where-}
-    {-put EQ = B.put (0 :: Word8)-}
-    {-put NE = B.put (bit 5 :: Word8)-}
-    {-put CS = B.put (bit 6 :: Word8)-}
-    {-put HS = B.put CS-}
-    {-put CC = B.put ((bit 6 .|. bit 5) :: Word8)-}
 
 getCondition :: Instruction -> Condition
 getCondition (ADD c _ _ _ _ _) = c
