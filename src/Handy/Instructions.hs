@@ -8,10 +8,10 @@ import Prelude hiding (EQ,LT,GT)
 type Destination = Register
 type Constant = Int32
 
-evaluateImm :: Word32 -> Word32
-evaluateImm i = result where shft = i `shiftR` 8
-                             val  = i .&. bitmask 8
-                             result = val `rotateR` (fromIntegral $ shft * 2)
+{-evaluateImm :: Word32 -> Word32-}
+{-evaluateImm i = result where shft = i `shiftR` 8-}
+                             {-val  = i .&. bitmask 8-}
+                             {-result = val `rotateR` (fromIntegral $ shft * 2)-}
 
 class ArgVal a where
 
@@ -103,11 +103,11 @@ data ShiftOp a = LSL (Argument a) -- Logical shift left
                deriving (Eq)
 
 instance Show (ShiftOp a) where
-    show (LSL a) = "LSL " ++ show a
-    show (LSR a) = "LSR " ++ show a
-    show (ASR a) = "ASR " ++ show a
-    show (ROR a) = "ROR " ++ show a
-    show RRX     = "RRX"
+    show (LSL a) = ", LSL " ++ show a
+    show (LSR a) = ", LSR " ++ show a
+    show (ASR a) = ", ASR " ++ show a
+    show (ROR a) = ", ROR " ++ show a
+    show RRX     = ", RRX"
     show NoShift = ""
 
 data S = NoS
@@ -179,4 +179,4 @@ instance Show Instruction where
 
 stringify3aryOp :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
 stringify3aryOp cond s dest src1 src2 shft = show cond ++ show s ++ " " ++ show dest ++ ", " ++ show src1
-                                                       ++ ", " ++ show src2 ++ ", " ++ show shft
+                                                       ++ ", " ++ show src2 ++ show shft
