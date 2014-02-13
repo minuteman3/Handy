@@ -7,7 +7,6 @@ import Handy.Memory
 import Handy.Instructions
 import Handy.StatusRegister
 import Handy.ALU
-import Handy.Util (computeBranchOffset, checkCondition)
 import Handy.Decoder
 import qualified Handy.Registers as Reg
 

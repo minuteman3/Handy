@@ -1,6 +1,7 @@
 {-# Language GADTs #-}
 module Handy.ALU where
 
+import Prelude hiding (LT,GT,EQ)
 import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Registers
@@ -170,3 +171,35 @@ computeRotateR val (ArgR shft) rf sr = (result, sr')
                                                     | degree' == 0 = sr { carry = val `testBit` 31 }
                                                     | degree' >  0 = sr { carry = val `testBit` (degree' - 1) }
 
+-- computeBranchOffset src := (SignExtend_30(signed_immed_24(src)) << 2)
+
+-- This is semantically consistent with the ISA defined behaviour for arguments
+-- to the B and BL instructions.
+computeBranchOffset :: Argument Constant -> Argument Constant
+computeBranchOffset (ArgC val) = ArgC result
+                                 where src = (fromIntegral $ mask) .&. val
+                                       se_src = if src `testBit` 23
+                                                then src .|. (fromIntegral $ complement mask)
+                                                else src
+                                       result = se_src `shiftL` 2
+                                       mask = bitmask 24
+
+
+checkCondition :: Condition -> StatusRegister -> Bool
+checkCondition AL _ = True
+checkCondition EQ cpsr = zero cpsr
+checkCondition CS cpsr = carry cpsr
+checkCondition MI cpsr = negative cpsr
+checkCondition VS cpsr = overflow cpsr
+checkCondition HI cpsr = (carry cpsr) && (not $ zero cpsr)
+checkCondition GE cpsr = (negative cpsr) == (overflow cpsr)
+checkCondition NE cpsr = not $ checkCondition EQ cpsr
+checkCondition CC cpsr = not $ checkCondition CS cpsr
+checkCondition PL cpsr = not $ checkCondition MI cpsr
+checkCondition VC cpsr = not $ checkCondition VS cpsr
+checkCondition LS cpsr = not $ checkCondition HI cpsr
+checkCondition LT cpsr = not $ checkCondition GE cpsr
+checkCondition GT cpsr = (not $ zero cpsr) && (checkCondition GE cpsr)
+checkCondition LE cpsr = not $ checkCondition GT cpsr
+checkCondition HS cpsr = checkCondition CS cpsr
+checkCondition LO cpsr = checkCondition CC cpsr
