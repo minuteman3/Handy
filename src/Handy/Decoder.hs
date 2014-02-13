@@ -187,7 +187,7 @@ decodeDataShiftImm = do word <- G.lookAhead $ G.getWord32be
                             decodeShiftLImm <|> decodeShiftRImm <|> decodeShiftAImm <|> decodeRotateImm <|> empty
 
 decodeDataShiftReg = do word <- G.lookAhead $ G.getWord32be
-                        if word `testBit` 7 || (not $ isDataProc word) then
+                        if (not $ word `testBit` 4) || word `testBit` 7 || (not $ isDataProc word) then
                             empty
                         else
                             decodeShiftLReg <|> decodeShiftRReg <|> decodeShiftAReg <|> decodeRotateReg <|> empty
@@ -197,6 +197,21 @@ dataProcMask = bit 24 .|. bit 23 .|. bit 20
 
 isDataProc :: Word32 -> Bool
 isDataProc word = (word .&. dataProcMask) /= 0
+
+shiftMask :: Word32
+shiftMask = bit 6 .|. bit 5
+
+isShiftL :: Word32 -> Bool
+isShiftL word = (word .&. shiftMask) == 0
+
+isLShiftR :: Word32 -> Bool
+isLShiftR word = (word .&. shiftMask) == bit 5
+
+isAShiftR :: Word32 -> Bool
+isAShiftR word = (word .&. shiftMask) == bit 6
+
+isRotateR :: Word32 -> Bool
+isRotateR word =(word .&. shiftMask) == shiftMask
 
 decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
 decodeLiteral = do word <- G.getWord32be
@@ -211,16 +226,17 @@ decodeLiteral = do word <- G.getWord32be
 decodeShiftLReg :: G.Get (Argument Register, ShiftOp Register)
 decodeShiftLReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 4 && (not $ word `testBit` 7) then
+                     else if isShiftL word then
                         do let register = word `getRegister` 0
                            let shift_reg = word `getRegister` 8
                            return $ (register, LSL shift_reg)
                      else empty
 
+
 decodeShiftRReg :: G.Get (Argument Register, ShiftOp Register)
 decodeShiftRReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 5 && word `testBit` 4 then
+                     else if isLShiftR word then
                         do let register = word `getRegister` 0
                            let shift_reg = word `getRegister` 8
                            return $ (register, LSR shift_reg)
@@ -229,7 +245,7 @@ decodeShiftRReg = do word <- G.getWord32be
 decodeShiftAReg :: G.Get (Argument Register, ShiftOp Register)
 decodeShiftAReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 6 && word `testBit` 4 then
+                     else if isAShiftR word then
                         do let register = word `getRegister` 0
                            let shift_reg = word `getRegister` 8
                            return $ (register, ASR shift_reg)
@@ -238,7 +254,7 @@ decodeShiftAReg = do word <- G.getWord32be
 decodeRotateReg :: G.Get (Argument Register, ShiftOp Register)
 decodeRotateReg = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 6 && word `testBit` 5 && word `testBit` 4 then
+                     else if isRotateR word then
                         do let register = word `getRegister` 0
                            let shift_reg = word `getRegister` 8
                            return $ (register, ROR shift_reg)
@@ -247,15 +263,16 @@ decodeRotateReg = do word <- G.getWord32be
 decodeShiftLImm :: G.Get (Argument Register, ShiftOp Constant)
 decodeShiftLImm = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 4 then empty
-                     else do let register = word `getRegister` 0
+                     else if isShiftL word then
+                          do let register = word `getRegister` 0
                              let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
                              return $ (register, LSL shift)
+                     else empty
 
 decodeShiftRImm :: G.Get (Argument Register, ShiftOp Constant)
 decodeShiftRImm = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 5 then
+                     else if isLShiftR word then
                         do let register = word `getRegister` 0
                            let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
                            return $ (register, LSR shift)
@@ -264,7 +281,7 @@ decodeShiftRImm = do word <- G.getWord32be
 decodeShiftAImm :: G.Get (Argument Register, ShiftOp Constant)
 decodeShiftAImm = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 6 then
+                     else if isAShiftR word then
                         do let register = word `getRegister` 0
                            let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
                            return $ (register, ASR shift)
@@ -273,7 +290,7 @@ decodeShiftAImm = do word <- G.getWord32be
 decodeRotateImm :: G.Get (Argument Register, ShiftOp Constant)
 decodeRotateImm = do word <- G.getWord32be
                      if word `testBit` 25 then empty
-                     else if word `testBit` 6 && word `testBit` 5 then
+                     else if isRotateR word then
                        do let register = word `getRegister` 0
                           let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
                           case shift of
