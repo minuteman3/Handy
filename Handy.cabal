@@ -5,29 +5,18 @@ name:                Handy
 version:             0.1.0
 synopsis:            An ARM7TDMI Emulator written for a Trinity College Dublin undergraduate degree final project
 homepage:            https://github.com/minuteman3/fyp
-license:             MIT
+license:             BSD3
 license-file:        LICENSE
 author:              Miles McGuire
 maintainer:          miles@milesmcguire.com
 build-type:          Simple
+extra-source-files:  README.md
 cabal-version:       >=1.10
 
 executable Handy
-  -- .hs or .lhs file containing the Main module.
-  -- main-is:             
-  
-  -- Modules included in this executable, other than Main.
+  main-is: Handy/Main.hs
   -- other-modules:       
-  
-  -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:    
-  
-  -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.7
-  
-  -- Directories containing source files.
+  other-extensions:    GADTs, StandaloneDeriving
+  build-depends:       base >=4.6 && <4.7, mtl >=2.1 && <2.2, binary >=0.7 && <0.8, bytestring >=0.10 && <0.11
   hs-source-dirs:      src
-  
-  -- Base language which the package is written in.
   default-language:    Haskell2010
-  
