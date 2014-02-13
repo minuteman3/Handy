@@ -14,8 +14,10 @@ import Control.Monad.State
 import Data.Int (Int32)
 import Data.Word (Word32)
 import Data.Bits
+import qualified Data.ByteString.Lazy as B
 
-type FetchRegister   = Maybe Instruction
+type InstructionWord = B.ByteString
+type FetchRegister   = Maybe InstructionWord
 type DecodeRegister  = Maybe Instruction
 type ExecuteRegister = Maybe Instruction
 
@@ -50,7 +52,7 @@ run = do
 
 pipeline :: Machine -> Machine
 pipeline machine = machine { fetchR   = nextInstruction machine
-                           , decodeR  = fetchR machine
+                           , decodeR  = decode $ fetchR machine
                            , executeR = decodeR machine
                            }
 
@@ -67,11 +69,9 @@ flushPipeline machine = machine { fetchR   = Nothing
     should be simplified a lot by just being a call to the memory.
 -}
 
-nextInstruction :: Machine -> Maybe Instruction
+nextInstruction :: Machine -> Maybe InstructionWord
 nextInstruction machine = let pc = fromIntegral $ (registers machine) `Reg.get` Reg.PC in
-                             if pc <= (4 * length (memory machine)) - 1  then
-                                Just $ (memory machine) !! (pc `div` 4)
-                             else Nothing
+                              Just $ B.pack $ (memory machine) `getInstructionWord` pc
 
 setRegister :: Reg.Register -> Int32 -> Machine -> Machine
 setRegister r v machine = machine { registers = Reg.set (registers machine) r v }

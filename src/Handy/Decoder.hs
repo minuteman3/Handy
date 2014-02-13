@@ -10,38 +10,43 @@ import Data.Word (Word8, Word16, Word32)
 import Data.Int (Int32)
 import Data.Bits
 import Control.Applicative
-import System.IO.Unsafe
 
 
-decode :: G.Get Instruction
-decode = do condition <- G.lookAhead $ decodeCondition
-            instruction_type <- G.lookAhead $ decodeInstructionType
-            case (unsafePerformIO $ print $ show instruction_type) `seq` instruction_type of
-              0 -> decodeType0 condition     -- Data processing immediate shift OR
-                                             -- Miscellaneous Instruction OR
-                                             -- Data processing register shift OR
-                                             -- Multiplies OR
-                                             -- Extra Load Stores OR
+decode :: Maybe B.ByteString -> Maybe Instruction
+decode Nothing   = Nothing
+decode (Just iw) = Just $ G.runGet decode' iw
 
-              1 -> decodeType1 condition     -- Data processing immediate value OR
-                                             -- Undefined instruction OR
-                                             -- Move immediate to status register
+decode' :: G.Get Instruction
+decode' = do condition <- G.lookAhead $ decodeCondition
+             case condition of
+               NV -> return HALT
+               _  -> do instruction_type <- G.lookAhead $ decodeInstructionType
+                        case instruction_type of
+                           0 -> decodeType0 condition     -- Data processing immediate shift OR
+                                                           -- Miscellaneous Instruction OR
+                                                           -- Data processing register shift OR
+                                                           -- Multiplies OR
+                                                           -- Extra Load Stores OR
+ 
+                           1 -> decodeType1 condition     -- Data processing immediate value OR
+                                                           -- Undefined instruction OR
+                                                           -- Move immediate to status register
+ 
+                           2 -> do return JunkInstruction -- Load/store immediate offset
+ 
+                           3 -> do return JunkInstruction -- Load/store register offset OR
+                                                           -- Media instruction OR
+                                                           -- Architecturally undefined
+ 
+                           4 -> do return JunkInstruction -- Load/store multiple
+ 
+                           5 -> decodeType5 condition     -- Branch/Branch Link
+ 
+                           6 -> do return JunkInstruction -- Coprocessor load/store and double register transfers
 
-              2 -> do return JunkInstruction -- Load/store immediate offset
-
-              3 -> do return JunkInstruction -- Load/store register offset OR
-                                             -- Media instruction OR
-                                             -- Architecturally undefined
-
-              4 -> do return JunkInstruction -- Load/store multiple
-
-              5 -> decodeType5 condition     -- Branch/Branch Link
-
-              6 -> do return JunkInstruction -- Coprocessor load/store and double register transfers
-
-              7 -> do return JunkInstruction -- Coprocessor data processing OR
-                                             -- Coprocessor register transfers OR
-                                             -- Software interrupt
+                           7 -> do return JunkInstruction -- Coprocessor data processing OR
+                                                           -- Coprocessor register transfers OR
+                                                           -- Software interrupt
 
 decodeType0 :: Condition -> G.Get Instruction
 decodeType0 cond = (decodeDataOp cond decodeDataShiftImm)
@@ -72,7 +77,7 @@ decodeMul cond = do word <- G.lookAhead $ G.getWord32be
 
 decodeDataOp :: (ArgVal a, ArgVal b, Arg a, Arg b) => Condition -> G.Get (Argument a, ShiftOp b) -> G.Get Instruction
 decodeDataOp cond parser = do (src2, shft) <- G.lookAhead $ parser
-                              s <- (unsafePerformIO $ print $ show src2) `seq` G.lookAhead $ decodeS
+                              s <- G.lookAhead $ decodeS
                               opcode <- G.lookAhead $ getOpcode
                               src1 <- G.lookAhead $ decodeRegisterSrc
                               dest <- G.lookAhead $ decodeRegisterDest

@@ -56,6 +56,7 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | GT -- Signed greater than  | Zero flag clear and Negative flag === Overflow flag
                | LE -- Signed less/equal    | Zero flag set or Negative flag !== Overflow flag
                | AL -- Always               | True
+               | NV -- Never                | False
                | HS -- Unsigned higher/same | Carry flag set
                | LO -- Unsigned lower       | Carry flag clear
                deriving (Eq, Enum)
@@ -78,6 +79,7 @@ instance Show Condition where
     show LT = "LT"
     show GT = "GT"
     show LE = "LE"
+    show NV = "NV"
 
 getCondition :: Instruction -> Condition
 getCondition (ADD c _ _ _ _ _) = c

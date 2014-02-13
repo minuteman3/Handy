@@ -1,7 +1,10 @@
+{-# Language GADTs #-}
 module Handy.Encoder (serialiseInstruction) where
 import Handy.Instructions
+import Handy.Registers
 import Handy.Util (bitmask)
 import Data.Word (Word8,Word32)
+import Data.Int (Int32)
 import Data.Bits
 
 data Opcode = OpAND
@@ -90,15 +93,15 @@ serialiseRegSrc1 = serialiseReg 16
 serialiseRegSrc2 = serialiseReg 0
 
 serialiseInstruction' :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Word32
-serialiseInstruction' cond s dest src1 src2 shft =  serialiseCondition cond
-                                                .|. serialiseS s
-                                                .|. serialiseRegDest dest
-                                                .|. serialiseRegSrc1 reg1
-                                                .|. serialiseShift src2 shft
-                                                where reg1 = fromArgument src1
+serialiseInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseCondition cond
+                                                       .|. serialiseS s
+                                                       .|. serialiseRegDest dest
+                                                       .|. serialiseRegSrc1 reg1
+                                                       .|. serialiseShift src2 shft
 
 
 serialiseInstruction :: Instruction -> Word32
+serialiseInstruction HALT                             = 2^32 - 1
 serialiseInstruction (ADD cond s dest src1 src2 shft) =  serialiseOpcode OpADD
                                                      .|. serialiseInstruction' cond s dest src1 src2 shft
 serialiseInstruction (AND cond s dest src1 src2 shft) =  serialiseOpcode OpAND
