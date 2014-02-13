@@ -13,12 +13,17 @@ type Destination = Register
 type Constant = Int32
 
 class ArgVal a where
-    toArgument :: a -> Argument a
 
-instance ArgVal Int32 where
-    toArgument n = ArgC n
+instance ArgVal Int32
+instance ArgVal Register
 
-instance ArgVal Register where
+class Arg a where
+    toArgument :: (ArgVal a, Arg a) => a -> Argument a
+
+instance Arg Int32 where
+    toArgument v = ArgC v
+
+instance Arg Register where
     toArgument r = ArgR r
 
 data Argument a where

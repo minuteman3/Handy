@@ -124,6 +124,11 @@ decodeInstructionType = do byte <- G.getWord8
                            let instruction_type = byte `shiftR` 1
                            return $ instruction_type .&. (fromIntegral $ bitmask 3)
 
+decodeDataProcessing = decodeLiteral <|> empty
+
+decodeDataShiftImm = decodeShiftImm <|> decodeShiftRImm <|> empty
+decodeDataShiftReg = decodeShiftLReg <|> decodeShiftRReg <|> empty
+
 decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
 decodeLiteral = do word <- G.getWord32be
                    if word `testBit` 25 then do
@@ -133,41 +138,42 @@ decodeLiteral = do word <- G.getWord32be
                       return $ (toArgument $ immediate, NoShift)
                    else empty
 
-decodeShiftImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
-decodeShiftImm word = if word `testBit` 25 then
-                         return Nothing
-                      else if word `testBit` 4 then
-                         return Nothing
-                      else do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                              let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                              return $ Just (register, LSL shift)
+decodeShiftImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeShiftImm = do word <- G.getWord32be
+                    if word `testBit` 25 then empty
+                    else if word `testBit` 4 then empty
+                    else do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
+                            let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
+                            return $ (register, LSL shift)
 
-decodeShiftLReg :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Register))
-decodeShiftLReg word = if word `testBit` 25 then
-                          return Nothing
-                       else if word `testBit` 4 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                             let shift = (word `shiftR` 8) .&. bitmask 4
-                             let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
-                             return $ Just (register, LSL shift_reg)
-                       else return Nothing
+decodeShiftLReg :: G.Get (Argument Register, ShiftOp Register)
+decodeShiftLReg = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 4 then
+                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
+                           let shift = (word `shiftR` 8) .&. bitmask 4
+                           let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
+                           return $ (register, LSL shift_reg)
+                     else empty
 
-decodeShiftRImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
-decodeShiftRImm word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 5 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                             let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
-                             return $ Just (register, LSR shift)
-                       else return Nothing
+decodeShiftRImm :: G.Get (Argument Register, ShiftOp Constant)
+decodeShiftRImm = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 5 then
+                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
+                           let shift = toArgument $ fromIntegral $ (word `shiftR` 7) .&. bitmask 5
+                           return $ (register, LSR shift)
+                     else empty
 
-decodeShiftRReg :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Register))
-decodeShiftRReg word = if word `testBit` 25 then return Nothing
-                       else if word `testBit` 5 && word `testBit` 4 then
-                          do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
-                             let shift = (word `shiftR` 8) .&. bitmask 4
-                             let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
-                             return $ Just (register, LSR shift_reg)
-                       else return Nothing
+decodeShiftRReg :: G.Get (Argument Register, ShiftOp Register)
+decodeShiftRReg = do word <- G.getWord32be
+                     if word `testBit` 25 then empty
+                     else if word `testBit` 5 && word `testBit` 4 then
+                        do let register = toArgument $ toEnum $ fromIntegral $ word .&. bitmask 4
+                           let shift = (word `shiftR` 8) .&. bitmask 4
+                           let shift_reg = toArgument $ toEnum $ fromIntegral $ shift
+                           return $ (register, LSR shift_reg)
+                     else empty
 
 decodeShiftAImm :: Word32 -> G.Get (Maybe (Argument Register, ShiftOp Constant))
 decodeShiftAImm word = if word `testBit` 25 then return Nothing
