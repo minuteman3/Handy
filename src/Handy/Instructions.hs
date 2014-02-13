@@ -170,6 +170,7 @@ instance Show Instruction where
     show (BX cond src1)            = "BX " ++ show cond ++ " " ++ show src1
     show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
     show (HALT)               = ""
+    show (JunkInstruction)    = "Junk"
 
 stringify3aryOp :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
 stringify3aryOp cond s dest src1 src2 shft = show cond ++ show s ++ " " ++ show dest ++ ", " ++ show src1

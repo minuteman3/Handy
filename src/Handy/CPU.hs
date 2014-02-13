@@ -87,6 +87,8 @@ execute (Just i) = execute' i
 
 execute' :: Instruction -> Run ()
 
+execute' JunkInstruction = error "Attempted to execute an unimplemented instruction"
+
 execute' HALT = state $ (\machine -> ((),machine { executing = False }))
 
 execute' (B cond src) = do machine <- get
