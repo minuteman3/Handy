@@ -25,7 +25,6 @@ instance Arg Register where
 data Argument a where
     ArgC :: Constant -> Argument Constant
     ArgR :: Register -> Argument Register
-    JunkArg :: Argument a
 
 instance Show (Argument a) where
     show (ArgC v) = "#" ++ (show v)
@@ -52,7 +51,6 @@ data Condition = EQ -- Equal / equals zero  | Zero flag set
                | GT -- Signed greater than  | Zero flag clear and Negative flag === Overflow flag
                | LE -- Signed less/equal    | Zero flag set or Negative flag !== Overflow flag
                | AL -- Always               | True
-               | JunkCondition
                | HS -- Unsigned higher/same | Carry flag set
                | LO -- Unsigned lower       | Carry flag clear
                deriving (Eq, Enum)
@@ -97,7 +95,6 @@ data ShiftOp a = LSL (Argument a) -- Logical shift left
                | ROR (Argument a) -- Rotate right
                | RRX -- Rotate right + sign extend
                | NoShift
-               | JunkShiftOp
                deriving (Eq)
 
 instance Show (ShiftOp a) where
