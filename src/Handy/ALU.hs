@@ -132,14 +132,14 @@ setSRarith1 _ _ result sr = sr { zero = result == 0
                                }
 
 setSRarith2 :: Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister
-setSRarith2 a b result sr = sr { carry    = isCarry a b
+setSRarith2 a b result sr = sr { carry    = isCarry (+) a b
                                , overflow = isOverflow a b
                                , zero = result == 0
                                , negative = result `testBit` 31
                                }
 
 setSRarith3 :: Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister
-setSRarith3 a b result sr = sr { carry    = isCarry a (negate b)
+setSRarith3 a b result sr = sr { carry    = not $ isCarry (-) a b
                                , overflow = isOverflow a (negate b)
                                , zero = result == 0
                                , negative = result `testBit` 31
