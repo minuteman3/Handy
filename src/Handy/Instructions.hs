@@ -171,6 +171,10 @@ data Instruction where
     HALT :: Instruction
     JunkInstruction :: Instruction
 
+-- FIXME: This is a pretty horrible hack
+instance Eq Instruction where
+    x == y = show x == show y
+
 instance Show (Instruction) where
     show (ADD cond s dest src1 src2 shft) = "ADD" ++ stringify3aryOp cond s dest src1 src2 shft
     show (BIC cond s dest src1 src2 shft) = "BIC" ++ stringify3aryOp cond s dest src1 src2 shft
