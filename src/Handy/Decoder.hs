@@ -68,8 +68,11 @@ decodeMul cond = do word <- G.lookAhead $ G.getWord32be
                         s <- G.lookAhead $ decodeS
                         let src1 = getRegister word 0
                             src2 = getRegister word 8
+                            src3 = getRegister word 12
                             (ArgR dest) = getRegister word 16
-                        return $ MUL cond s dest src1 src2
+                        case word `testBit` 21 of
+                            False -> return $ MUL cond s dest src1 src2
+                            True  -> return $ MLA cond s dest src1 src2 src3
                     else
                         empty
 

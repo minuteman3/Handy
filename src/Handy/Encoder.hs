@@ -152,6 +152,16 @@ serialiseInstruction (MUL cond s dest (ArgR src1) (ArgR src2)) =  serialiseCondi
                                                               .|. bit 4
                                                               .|. bit 7
 
+serialiseInstruction (MLA cond s dest (ArgR src1) (ArgR src2) (ArgR src3)) =  serialiseCondition cond
+                                                                          .|. serialiseS s
+                                                                          .|. serialiseReg 16 dest
+                                                                          .|. serialiseReg 8  src1
+                                                                          .|. serialiseReg 0  src2
+                                                                          .|. serialiseReg 12 src3
+                                                                          .|. bit 4
+                                                                          .|. bit 7
+                                                                          .|. bit 21
+
 serialiseInstruction (B cond (ArgC dest)) = serialiseCondition cond
                                          .|. bit 27
                                          .|. bit 25

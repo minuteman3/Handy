@@ -28,6 +28,9 @@ compute' (MVN cond _ dest src shft) rf sr = computeArith (const.complement) dest
 
 compute' (MUL cond _ dest src1 src2) rf sr = computeArith (*) dest src1 src2 cond sr rf setSRarith1
 
+compute' (MLA cond _ dest src1 src2 src3) rf sr = computeArith (+) dest (ArgR dest) src3 cond sr' rf' setSRarith1
+                                      where (rf',sr') = computeArith (*) dest src1 src2 cond sr rf setSRarith1
+
 compute' (ADD cond _ dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg2 cond sr rf setSRarith2
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr

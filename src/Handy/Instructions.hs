@@ -93,6 +93,7 @@ getCondition (AND c _ _ _ _ _) = c
 getCondition (ORR c _ _ _ _ _) = c
 getCondition (EOR c _ _ _ _ _) = c
 getCondition (MUL c _ _ _ _)   = c
+getCondition (MLA c _ _ _ _ _)   = c
 getCondition (CMP c _ _ _)   = c
 getCondition (CMN c _ _ _)   = c
 getCondition (TEQ c _ _ _)   = c
@@ -137,6 +138,7 @@ getS (AND _ s _ _ _ _) = s
 getS (ORR _ s _ _ _ _) = s
 getS (EOR _ s _ _ _ _) = s
 getS (MUL _ s _ _ _)   = s
+getS (MLA _ s _ _ _ _)   = s
 getS (MOV _ s _ _ _)   = s
 getS (MVN _ s _ _ _)   = s
 
@@ -156,6 +158,7 @@ data Instruction where
     SBC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     RSC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     MUL  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
+    MLA  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Argument Register -> Instruction
     CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TST  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TEQ  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
@@ -181,6 +184,8 @@ instance Show (Instruction) where
     show (EOR cond s dest src1 src2 shft) = "EOR" ++ stringify3aryOp cond s dest src1 src2 shft
     show (MUL cond s dest src1 src2) = "MUL" ++ show cond ++ show s ++ " " ++ show dest ++ ", "
                                            ++ show src1 ++ ", " ++ show src2
+    show (MLA cond s dest src1 src2 src3) = "MLA" ++ show cond ++ show s ++ " " ++ show dest ++ ", "
+                                            ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show src3
     show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (CMN cond src1 src2 shft) = "CMN" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (TST cond src1 src2 shft) = "TST" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
