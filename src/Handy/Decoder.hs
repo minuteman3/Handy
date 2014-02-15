@@ -10,6 +10,7 @@ import Data.Word (Word8, Word16, Word32)
 import Data.Int (Int32)
 import Data.Bits
 import Control.Applicative
+import System.IO.Unsafe
 
 
 decode :: Maybe B.ByteString -> Maybe Instruction
@@ -218,12 +219,16 @@ isAShiftR word = (word .&. shiftMask) == bit 6
 isRotateR :: Word32 -> Bool
 isRotateR word =(word .&. shiftMask) == shiftMask
 
+evaluateImm :: Word32 -> Word32
+evaluateImm i = result where shft = i `shiftR` 8
+                             val  = i .&. bitmask 8
+                             result = val `rotateR` (fromIntegral $ shft * 2)
+
 decodeLiteral :: G.Get (Argument Constant, ShiftOp a)
 decodeLiteral = do word <- G.getWord32be
                    if word `testBit` 25 then do
-                      let immed_8 = word .&. bitmask 8
-                      let rotate_imm = fromIntegral $ (word `shiftR` 8) .&. bitmask 4
-                      let immediate = (fromIntegral $ immed_8 `rotateR` rotate_imm) :: Int32
+                      let imm_part = word .&. bitmask 12
+                          immediate = fromIntegral $ evaluateImm imm_part
                       return $ (toArgument $ immediate, NoShift)
                    else empty
 

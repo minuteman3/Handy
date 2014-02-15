@@ -14,7 +14,7 @@ toMemory :: [Instruction] -> Memory
 toMemory is = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..] $ map serialiseInstruction is
 
 testProg :: Program
-testProg = [ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
+testProg = [ADD AL NoS R0 (ArgR R0) (ArgC 1024) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift

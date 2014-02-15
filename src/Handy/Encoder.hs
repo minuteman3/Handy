@@ -26,16 +26,16 @@ data Opcode = OpAND
             deriving (Eq,Show,Enum,Ord)
 
 makeImm :: Word32 -> (Word8,Word8)
-makeImm val = makeImm' 0 val val
+makeImm val = if val > 255 then makeImm' 0 val val else (fromIntegral val,0)
+
 
 makeImm' :: Int -> Word32 -> Word32 -> (Word8,Word8)
 makeImm' i val orig = if popCount orig > 8 then error "Invalid immediate value"
                       else if i > 30 then error "Invalid immediate value"
-                      else if (maskVal `rotateR` (32 - i)) == orig && i `mod` 2 == 0 then result
-                      else makeImm' (i+1) (val `rotateR` 1) orig
-                      where maskVal = val .&. bitmask 8
-                            result = if i > 0 then (fromIntegral maskVal, fromIntegral (30 - i))
-                                     else (fromIntegral maskVal, 0)
+                      else if validImm orig val i then (fromIntegral val, fromIntegral i)
+                      else makeImm' (i+1) (val `rotateL` 1) orig
+
+validImm orig val i = i `mod` 2 == 0 && (popCount $ val .&. bitmask 8) == popCount orig
 
 serialiseImm :: Int32 -> Word32
 serialiseImm i = result where (val,shft) = makeImm $ fromIntegral i
