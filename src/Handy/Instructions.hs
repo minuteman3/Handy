@@ -17,17 +17,17 @@ class Arg a where
     toArgument :: (ArgVal a, Arg a) => a -> Argument a
 
 instance Arg Int32 where
-    toArgument v = ArgC v
+    toArgument = ArgC
 
 instance Arg Register where
-    toArgument r = ArgR r
+    toArgument = ArgR
 
 data Argument a where
     ArgC :: Constant -> Argument Constant
     ArgR :: Register -> Argument Register
 
 instance Show (Argument a) where
-    show (ArgC v) = "#" ++ (show v)
+    show (ArgC v) = "#" ++ show v
     show (ArgR r) = show r
 
 eval :: Argument a -> RegisterFile -> Int32
@@ -137,7 +137,7 @@ getS (MLA _ s _ _ _ _)   = s
 getS (MOV _ s _ _ _)   = s
 getS (MVN _ s _ _ _)   = s
 
-getS (CMP _ _ _ _)     = S
+getS CMP{} = S
 
 getS _ = undefined
 

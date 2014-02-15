@@ -9,6 +9,7 @@ data StatusRegister = StatusRegister { negative :: Bool
                                      , overflow :: Bool
                                      } deriving Show
 
+blankStatusRegister :: StatusRegister
 blankStatusRegister = StatusRegister { negative = False
                                      , zero     = False
                                      , carry    = False
