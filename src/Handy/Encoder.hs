@@ -110,7 +110,7 @@ serialise2aryInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseConditio
 
 
 serialiseInstruction :: Instruction -> Word32
-serialiseInstruction HALT                             = 2^32 - 1
+serialiseInstruction HALT                             = bitmask 32
 serialiseInstruction (ADD cond s dest src1 src2 shft) =  serialiseOpcode OpADD
                                                      .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (AND cond s dest src1 src2 shft) =  serialiseOpcode OpAND
