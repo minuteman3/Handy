@@ -7,7 +7,7 @@ import Handy.StatusRegister
 import Handy.Registers
 import Handy.Util
 import Data.Int  (Int32)
-import Data.Word (Word32, Word64)
+import Data.Word (Word32)
 import Data.Bits
 
 compute :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
@@ -87,6 +87,7 @@ compute' (ORR cond _ dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 a
 compute' (EOR cond _ dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
+compute' _ _ _ = error "compute' called on non-ALU instruction"
 
 computeBic :: Bits a => a -> a -> a
 computeBic x y = x .&. (complement y)
@@ -97,6 +98,7 @@ computeAdc sr x y = x + y + if carry sr then 1 else 0
 computeSbc :: Num a => StatusRegister -> a -> a -> a
 computeSbc sr x y = x + y + if not $ carry sr then 1 else 0
 
+computeBranch :: Argument a -> Condition -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
 computeBranch src cond rf sr = (branch,sr) where
                                offset = src `eval` rf
                                offset' = computeBranchOffset (ArgC offset)

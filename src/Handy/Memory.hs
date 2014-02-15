@@ -1,8 +1,6 @@
 module Handy.Memory where
 
-import Handy.Instructions
-import Handy.Registers
-import Data.Word
+import Data.Word (Word8,Word16,Word32)
 import Data.Bits
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as M

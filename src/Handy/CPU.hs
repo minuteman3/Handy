@@ -12,8 +12,6 @@ import qualified Handy.Registers as Reg
 
 import Control.Monad.State
 import Data.Int (Int32)
-import Data.Word (Word32)
-import Data.Bits
 import qualified Data.ByteString.Lazy as B
 
 type InstructionWord = B.ByteString
@@ -38,17 +36,8 @@ run = do
         modify pipeline
         i <- gets executeR
         execute i
-        machine <- get
         modify incPC
         run
-
-{-
-    TODO/FIXME:
-    Currently decode is a no op because instructions arrive fully formed.
-    Later, fetchR should be a "Maybe Word32", and there should be an instruction
-    decoder with type Word32 -> Instruction that gets applied to the contents of
-    decodeR as they move into executeR
--}
 
 pipeline :: Machine -> Machine
 pipeline machine = machine { fetchR   = nextInstruction machine
@@ -61,13 +50,6 @@ flushPipeline machine = machine { fetchR   = Nothing
                                 , decodeR  = Nothing
                                 , executeR = Nothing
                                 }
-
-{-
-    TODO/FIXME:
-    All this bounds checking is only necessary because of the current temporary
-    implementation of memory as a list of instructions. Later on this function
-    should be simplified a lot by just being a call to the memory.
--}
 
 nextInstruction :: Machine -> Maybe InstructionWord
 nextInstruction machine = let pc = fromIntegral $ (registers machine) `Reg.get` Reg.PC in
@@ -96,7 +78,6 @@ execute' (B cond src) = do machine <- get
                                put $ machine { registers = rf }
                                modify $ flushPipeline
 
-
 execute' (BL cond src) = do machine <- get
                             let rf = registers machine
                             when (checkCondition cond $ cpsr machine) $ do
@@ -107,7 +88,6 @@ execute' (BL cond src) = do machine <- get
 execute' (BX cond src) = do machine <- get
                             let rf = registers machine
                             let sr = cpsr machine
-                            let (ArgR dest) = src
                             when (checkCondition cond $ sr) $ do
                                 let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
                                 let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
@@ -118,7 +98,3 @@ execute' i = do machine <- get
                 when (checkCondition (getCondition i) (cpsr machine)) $ do
                     let (rf,sr) = compute i (registers machine) (cpsr machine)
                     put $ machine { cpsr = sr, registers = rf }
-
-
-
-

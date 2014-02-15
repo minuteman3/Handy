@@ -83,18 +83,27 @@ instance Show Condition where
 
 getCondition :: Instruction -> Condition
 getCondition (ADD c _ _ _ _ _) = c
+getCondition (ADC c _ _ _ _ _) = c
+getCondition (BIC c _ _ _ _ _) = c
 getCondition (SUB c _ _ _ _ _) = c
+getCondition (SBC c _ _ _ _ _) = c
 getCondition (RSB c _ _ _ _ _) = c
+getCondition (RSC c _ _ _ _ _) = c
 getCondition (AND c _ _ _ _ _) = c
 getCondition (ORR c _ _ _ _ _) = c
 getCondition (EOR c _ _ _ _ _) = c
 getCondition (MUL c _ _ _ _)   = c
 getCondition (CMP c _ _ _)   = c
+getCondition (CMN c _ _ _)   = c
+getCondition (TEQ c _ _ _)   = c
+getCondition (TST c _ _ _)   = c
 getCondition (MOV c _ _ _ _)   = c
 getCondition (MVN c _ _ _ _)   = c
 getCondition (B  c _)        = c
 getCondition (BL c _)        = c
 getCondition (BX c _)        = c
+getCondition HALT = undefined
+getCondition JunkInstruction = undefined
 
 data ShiftOp a = LSL (Argument a) -- Logical shift left
                | LSR (Argument a) -- Logical shift right
@@ -156,19 +165,26 @@ data Instruction where
     B    :: Condition -> Argument Constant  -> Instruction
     BL   :: Condition -> Argument Constant  -> Instruction
     BX   :: Condition -> Argument Register -> Instruction
-    HALT :: Instruction -- FIXME: Not a real instruction. Try and come up with alternative.
+    HALT :: Instruction
     JunkInstruction :: Instruction
 
-instance Show Instruction where
+instance Show (Instruction) where
     show (ADD cond s dest src1 src2 shft) = "ADD" ++ stringify3aryOp cond s dest src1 src2 shft
+    show (BIC cond s dest src1 src2 shft) = "BIC" ++ stringify3aryOp cond s dest src1 src2 shft
+    show (ADC cond s dest src1 src2 shft) = "ADC" ++ stringify3aryOp cond s dest src1 src2 shft
+    show (SBC cond s dest src1 src2 shft) = "SBC" ++ stringify3aryOp cond s dest src1 src2 shft
+    show (RSC cond s dest src1 src2 shft) = "RSC" ++ stringify3aryOp cond s dest src1 src2 shft
     show (SUB cond s dest src1 src2 shft) = "SUB" ++ stringify3aryOp cond s dest src1 src2 shft
     show (RSB cond s dest src1 src2 shft) = "RSB" ++ stringify3aryOp cond s dest src1 src2 shft
     show (AND cond s dest src1 src2 shft) = "AND" ++ stringify3aryOp cond s dest src1 src2 shft
     show (ORR cond s dest src1 src2 shft) = "ORR" ++ stringify3aryOp cond s dest src1 src2 shft
     show (EOR cond s dest src1 src2 shft) = "EOR" ++ stringify3aryOp cond s dest src1 src2 shft
-    show (MUL cond s dest src1 src2) = "MUL" ++ show cond ++ " " ++ show dest ++ ", "
+    show (MUL cond s dest src1 src2) = "MUL" ++ show cond ++ show s ++ " " ++ show dest ++ ", "
                                            ++ show src1 ++ ", " ++ show src2
     show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
+    show (CMN cond src1 src2 shft) = "CMN" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
+    show (TST cond src1 src2 shft) = "TST" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
+    show (TEQ cond src1 src2 shft) = "TEQ" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (MOV cond s dest src1 shft) = "MOV" ++ show cond ++ show s ++ " " ++ show dest
                                              ++ ", " ++ show src1 ++ ", " ++ show shft
     show (MVN cond s dest src1 shft) = "MVN" ++ show cond ++ show s ++ " " ++ show dest

@@ -5,7 +5,6 @@ import Handy.Registers
 import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Encoder
-import qualified Data.IntMap.Lazy as M
 import Control.Monad.State
 
 type Program = [Instruction]
@@ -40,6 +39,7 @@ testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
              {-SUB AL NoS R0 (ArgR R0) (ArgC 11) NoShift,-}
              {-HALT]-}
 
+testProg2 :: Program
 testProg2 = [MOV AL NoS R0 (ArgC 8) NoShift,
              MOV AL NoS R1 (ArgC 1) NoShift,
              ADD AL NoS R1 (ArgR R1) (ArgC 1) NoShift,
@@ -48,6 +48,7 @@ testProg2 = [MOV AL NoS R0 (ArgC 8) NoShift,
              HALT]
 -- Expect final state: R0 = 2, R1 = 10, R14 = 4, R15 = 5, all other registers = 0, CPSR = ftff
 
+testProg3 :: Program
 testProg3 = [MOV AL NoS R0 (ArgC 1) NoShift,
              EOR AL NoS R0 (ArgR R0) (ArgC 3) NoShift,
              HALT]

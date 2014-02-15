@@ -35,6 +35,7 @@ makeImm' i val orig = if popCount orig > 8 then error "Invalid immediate value"
                       else if validImm orig val i then (fromIntegral val, fromIntegral i)
                       else makeImm' (i+1) (val `rotateL` 1) orig
 
+validImm :: Word32 -> Word32 -> Int -> Bool
 validImm orig val i = i `mod` 2 == 0 && (popCount $ val .&. bitmask 8) == popCount orig
 
 serialiseImm :: Int32 -> Word32
@@ -51,7 +52,7 @@ serialiseRegShftImm :: Register -> Constant -> Word32
 serialiseRegShftImm reg shft = (serialiseReg 0 reg) .|. (serialiseShiftConstant shft)
 
 serialiseRegShftReg :: Register -> Register -> Word32
-serialiseRegShftReg reg shft = (serialiseReg 0 reg) .|. (serialiseReg 8 reg) .|. bit 4
+serialiseRegShftReg reg shft = (serialiseReg 0 reg) .|. (serialiseReg 8 shft) .|. bit 4
 
 serialiseShift :: Argument a -> ShiftOp b -> Word32
 serialiseShift (ArgC val) NoShift = serialiseImm val
@@ -88,32 +89,28 @@ serialiseS s = (fromIntegral $ fromEnum $ s) `shiftL` 20
 serialiseReg :: Int -> Register -> Word32
 serialiseReg place r  = (fromIntegral $ fromEnum $ r) `shiftL` place
 
-serialiseRegDest = serialiseReg 12
-serialiseRegSrc1 = serialiseReg 16
-serialiseRegSrc2 = serialiseReg 0
-
 serialiseCompareInstruction :: Condition -> Argument Register -> Argument a -> ShiftOp b -> Word32
 serialiseCompareInstruction cond (ArgR reg1) src2 shft =  serialiseCondition cond
                                                .|. serialiseS S
-                                               .|. serialiseRegSrc1 reg1
+                                               .|. serialiseReg 16 reg1
                                                .|. serialiseShift src2 shft
 
 serialise1aryInstruction' :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Word32
 serialise1aryInstruction' cond s dest src shft =  serialiseCondition cond
                                               .|. serialiseS s
-                                              .|. serialiseRegDest dest
+                                              .|. serialiseReg 12 dest
                                               .|. serialiseShift src shft
 
 serialise2aryInstruction' :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Word32
 serialise2aryInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseCondition cond
                                                            .|. serialiseS s
-                                                           .|. serialiseRegDest dest
-                                                           .|. serialiseRegSrc1 reg1
+                                                           .|. serialiseReg 12 dest
+                                                           .|. serialiseReg 16 reg1
                                                            .|. serialiseShift src2 shft
 
 
 serialiseInstruction :: Instruction -> Word32
-serialiseInstruction HALT                             = 2^32 - 1
+serialiseInstruction HALT                             = (2^32 - 1)
 serialiseInstruction (ADD cond s dest src1 src2 shft) =  serialiseOpcode OpADD
                                                      .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (AND cond s dest src1 src2 shft) =  serialiseOpcode OpAND
@@ -132,11 +129,15 @@ serialiseInstruction (EOR cond s dest src1 src2 shft) =  serialiseOpcode OpEOR
                                                      .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (ORR cond s dest src1 src2 shft) =  serialiseOpcode OpORR
                                                      .|. serialise2aryInstruction' cond s dest src1 src2 shft
+serialiseInstruction (BIC cond s dest src1 src2 shft) =  serialiseOpcode OpBIC
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (MOV cond s dest src shft)       =  serialiseOpcode OpMOV
                                                      .|. serialise1aryInstruction' cond s dest src shft
 serialiseInstruction (MVN cond s dest src shft)       =  serialiseOpcode OpMVN
                                                      .|. serialise1aryInstruction' cond s dest src shft
 serialiseInstruction (CMP cond src1 src2 shft)        =  serialiseOpcode OpCMP
+                                                     .|. serialiseCompareInstruction cond src1 src2 shft
+serialiseInstruction (CMN cond src1 src2 shft)        =  serialiseOpcode OpCMN
                                                      .|. serialiseCompareInstruction cond src1 src2 shft
 serialiseInstruction (TEQ cond src1 src2 shft)        =  serialiseOpcode OpTEQ
                                                      .|. serialiseCompareInstruction cond src1 src2 shft
@@ -161,3 +162,9 @@ serialiseInstruction (BL cond (ArgC dest)) = serialiseCondition cond
                                           .|. bit 25
                                           .|. bit 24
                                           .|. ((fromIntegral $ dest) .&. bitmask 24)
+
+serialiseInstruction (BX cond (ArgR dest)) =  serialiseCondition cond
+                                          .|. bit 24
+                                          .|. bit 21
+                                          .|. bit 4
+                                          .|. serialiseReg 0 dest
