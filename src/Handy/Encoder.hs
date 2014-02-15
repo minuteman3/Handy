@@ -92,6 +92,12 @@ serialiseRegDest = serialiseReg 12
 serialiseRegSrc1 = serialiseReg 16
 serialiseRegSrc2 = serialiseReg 0
 
+serialiseCompareInstruction :: Condition -> Argument Register -> Argument a -> ShiftOp b -> Word32
+serialiseCompareInstruction cond (ArgR reg1) src2 shft =  serialiseCondition cond
+                                               .|. serialiseS S
+                                               .|. serialiseRegSrc1 reg1
+                                               .|. serialiseShift src2 shft
+
 serialise1aryInstruction' :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Word32
 serialise1aryInstruction' cond s dest src shft =  serialiseCondition cond
                                               .|. serialiseS s
@@ -130,3 +136,28 @@ serialiseInstruction (MOV cond s dest src shft)       =  serialiseOpcode OpMOV
                                                      .|. serialise1aryInstruction' cond s dest src shft
 serialiseInstruction (MVN cond s dest src shft)       =  serialiseOpcode OpMVN
                                                      .|. serialise1aryInstruction' cond s dest src shft
+serialiseInstruction (CMP cond src1 src2 shft)        =  serialiseOpcode OpCMP
+                                                     .|. serialiseCompareInstruction cond src1 src2 shft
+serialiseInstruction (TEQ cond src1 src2 shft)        =  serialiseOpcode OpTEQ
+                                                     .|. serialiseCompareInstruction cond src1 src2 shft
+serialiseInstruction (TST cond src1 src2 shft)        =  serialiseOpcode OpTST
+                                                     .|. serialiseCompareInstruction cond src1 src2 shft
+
+serialiseInstruction (MUL cond s dest (ArgR src1) (ArgR src2)) =  serialiseCondition cond
+                                                              .|. serialiseS s
+                                                              .|. serialiseReg 16 dest
+                                                              .|. serialiseReg 8  src1
+                                                              .|. serialiseReg 0  src2
+                                                              .|. bit 4
+                                                              .|. bit 7
+
+serialiseInstruction (B cond (ArgC dest)) = serialiseCondition cond
+                                         .|. bit 27
+                                         .|. bit 25
+                                         .|. ((fromIntegral $ dest) .&. bitmask 24)
+
+serialiseInstruction (BL cond (ArgC dest)) = serialiseCondition cond
+                                          .|. bit 27
+                                          .|. bit 25
+                                          .|. bit 24
+                                          .|. ((fromIntegral $ dest) .&. bitmask 24)
