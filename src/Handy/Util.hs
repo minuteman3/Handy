@@ -3,7 +3,7 @@
 module Handy.Util where
 
 import Data.Int (Int32)
-import Data.Word (Word32,Word64)
+import Data.Word (Word8,Word32,Word64)
 import Data.Bits
 import Handy.StatusRegister
 import Prelude hiding (EQ,GT,LT)
@@ -20,3 +20,8 @@ isCarry a b = result `testBit` 32
 isOverflow :: Int32 -> Int32 -> Bool
 isOverflow a b = (signum a) == (signum b) && (signum a) /= (signum (a + b))
 
+chunkWord32 :: Word32 -> [Word8]
+chunkWord32 word = map fromIntegral [a,b,c,d] where a = word `shiftR` 24
+                                                    b = (word `shiftR` 16) .&. bitmask 8
+                                                    c = (word `shiftR` 8)  .&. bitmask 8
+                                                    d = word .&. bitmask 8

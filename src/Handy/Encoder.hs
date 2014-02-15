@@ -1,5 +1,5 @@
 {-# Language GADTs #-}
-module Handy.Encoder (serialiseInstruction) where
+module Handy.Encoder where
 import Handy.Instructions
 import Handy.Registers
 import Handy.Util (bitmask)
@@ -92,31 +92,41 @@ serialiseRegDest = serialiseReg 12
 serialiseRegSrc1 = serialiseReg 16
 serialiseRegSrc2 = serialiseReg 0
 
-serialiseInstruction' :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Word32
-serialiseInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseCondition cond
-                                                       .|. serialiseS s
-                                                       .|. serialiseRegDest dest
-                                                       .|. serialiseRegSrc1 reg1
-                                                       .|. serialiseShift src2 shft
+serialise1aryInstruction' :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Word32
+serialise1aryInstruction' cond s dest src shft =  serialiseCondition cond
+                                              .|. serialiseS s
+                                              .|. serialiseRegDest dest
+                                              .|. serialiseShift src shft
+
+serialise2aryInstruction' :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Word32
+serialise2aryInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseCondition cond
+                                                           .|. serialiseS s
+                                                           .|. serialiseRegDest dest
+                                                           .|. serialiseRegSrc1 reg1
+                                                           .|. serialiseShift src2 shft
 
 
 serialiseInstruction :: Instruction -> Word32
 serialiseInstruction HALT                             = 2^32 - 1
 serialiseInstruction (ADD cond s dest src1 src2 shft) =  serialiseOpcode OpADD
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (AND cond s dest src1 src2 shft) =  serialiseOpcode OpAND
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (ADC cond s dest src1 src2 shft) =  serialiseOpcode OpADC
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (SUB cond s dest src1 src2 shft) =  serialiseOpcode OpSUB
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (RSB cond s dest src1 src2 shft) =  serialiseOpcode OpRSB
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (SBC cond s dest src1 src2 shft) =  serialiseOpcode OpSBC
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (RSC cond s dest src1 src2 shft) =  serialiseOpcode OpRSC
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (EOR cond s dest src1 src2 shft) =  serialiseOpcode OpEOR
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
 serialiseInstruction (ORR cond s dest src1 src2 shft) =  serialiseOpcode OpORR
-                                                     .|. serialiseInstruction' cond s dest src1 src2 shft
+                                                     .|. serialise2aryInstruction' cond s dest src1 src2 shft
+serialiseInstruction (MOV cond s dest src shft)       =  serialiseOpcode OpMOV
+                                                     .|. serialise1aryInstruction' cond s dest src shft
+serialiseInstruction (MVN cond s dest src shft)       =  serialiseOpcode OpMVN
+                                                     .|. serialise1aryInstruction' cond s dest src shft

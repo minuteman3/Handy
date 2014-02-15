@@ -20,6 +20,8 @@ testProg = [ADD AL NoS R0 (ArgR R0) (ArgC 1024) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
            ,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift
+           ,MOV AL NoS R1 (ArgC 1024) NoShift
+           ,MVN AL NoS R2 (ArgC 1) NoShift
            ,HALT]
 
 {-testProg :: Memory-}
