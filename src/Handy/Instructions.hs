@@ -8,11 +8,6 @@ import Prelude hiding (EQ,LT,GT)
 type Destination = Register
 type Constant = Int32
 
-{-evaluateImm :: Word32 -> Word32-}
-{-evaluateImm i = result where shft = i `shiftR` 8-}
-                             {-val  = i .&. bitmask 8-}
-                             {-result = val `rotateR` (fromIntegral $ shft * 2)-}
-
 class ArgVal a where
 
 instance ArgVal Int32
