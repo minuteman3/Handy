@@ -32,11 +32,23 @@ compute' (ADD cond _ dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
+compute' (ADC cond _ dest src1 src2 shft) rf sr = computeArith (computeAdc sr) dest src1 arg2 cond sr rf setSRarith2
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, _) = computeShift src2 shft rf sr
+
 compute' (SUB cond _ dest src1 src2 shft) rf sr = computeArith (-) dest src1 arg2 cond sr rf setSRarith3
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
+compute' (SBC cond _ dest src1 src2 shft) rf sr = computeArith (computeSbc sr) dest src1 arg2 cond sr rf setSRarith3
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, _) = computeShift src2 shft rf sr
+
 compute' (RSB cond _ dest src1 src2 shft) rf sr = computeArith (-) dest arg2 src1 cond sr rf setSRarith3
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, _) = computeShift src2 shft rf sr
+
+compute' (RSC cond _ dest src1 src2 shft) rf sr = computeArith (computeSbc sr) dest arg2 src1 cond sr rf setSRarith3
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, _) = computeShift src2 shft rf sr
 
@@ -45,7 +57,26 @@ compute' (CMP cond src1 src2 shft) rf sr = (rf,sr')
                                        arg2 = (ArgC shiftresult)
                                        (shiftresult, _) = computeShift src2 shft rf sr
 
+compute' (CMN cond src1 src2 shft) rf sr = (rf,sr')
+                                 where (_,sr') = computeArith (+) None src1 arg2 cond sr rf setSRarith2
+                                       arg2 = (ArgC shiftresult)
+                                       (shiftresult, _) = computeShift src2 shft rf sr
+
+compute' (TST cond src1 src2 shft) rf sr = (rf,sr')
+                                 where (_,sr') = computeArith (.&.) None src1 arg2 cond sr rf setSRarith1
+                                       arg2 = (ArgC shiftresult)
+                                       (shiftresult, _) = computeShift src2 shft rf sr
+
+compute' (TEQ cond src1 src2 shft) rf sr = (rf,sr')
+                                 where (_,sr') = computeArith xor None src1 arg2 cond sr rf setSRarith1
+                                       arg2 = (ArgC shiftresult)
+                                       (shiftresult, _) = computeShift src2 shft rf sr
+
 compute' (AND cond _ dest src1 src2 shft) rf sr = computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
+                                                where arg2 = (ArgC shiftresult)
+                                                      (shiftresult, sr') = computeShift src2 shft rf sr
+
+compute' (BIC cond _ dest src1 src2 shft) rf sr = computeArith computeBic dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
 
@@ -56,6 +87,15 @@ compute' (ORR cond _ dest src1 src2 shft) rf sr = computeArith (.|.) dest src1 a
 compute' (EOR cond _ dest src1 src2 shft) rf sr = computeArith (xor) dest src1 arg2 cond sr' rf setSRarith1
                                                 where arg2 = (ArgC shiftresult)
                                                       (shiftresult, sr') = computeShift src2 shft rf sr
+
+computeBic :: Bits a => a -> a -> a
+computeBic x y = x .&. (complement y)
+
+computeAdc :: Num a => StatusRegister -> a -> a -> a
+computeAdc sr x y = x + y + if carry sr then 1 else 0
+
+computeSbc :: Num a => StatusRegister -> a -> a -> a
+computeSbc sr x y = x + y + if not $ carry sr then 1 else 0
 
 computeBranch src cond rf sr = (branch,sr) where
                                offset = src `eval` rf
@@ -71,6 +111,7 @@ computeArith :: (Int32 -> Int32 -> Int32)
               -> RegisterFile
               -> (Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister)
               -> (RegisterFile, StatusRegister)
+
 computeArith op dest src1 src2 cond sr rf srupdate = case checkCondition cond sr of
                                                         False -> (rf, sr)
                                                         True  -> (rf', sr') where
