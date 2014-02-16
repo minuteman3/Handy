@@ -90,10 +90,7 @@ decodeSMULL :: Condition -> G.Get Instruction
 decodeSMULL cond = do word <- G.lookAhead G.getWord32be
                       if word .&. mulMask == (bit 23 .|. bit 22) then do
                           s <- G.lookAhead decodeS
-                          let src1 = getRegister word 0
-                              src2 = getRegister word 8
-                              (ArgR dest1) = getRegister word 12
-                              (ArgR dest2) = getRegister word 16
+                          let (src1,src2,dest1,dest2) = getSMoperands word
                           return $ SMULL cond s dest1 dest2 src1 src2
                       else empty
 
@@ -101,12 +98,15 @@ decodeSMLAL :: Condition -> G.Get Instruction
 decodeSMLAL cond = do word <- G.lookAhead G.getWord32be
                       if word .&. mulMask == (bit 23 .|. bit 22 .|. bit 21) then do
                           s <- G.lookAhead decodeS
-                          let src1 = getRegister word 0
-                              src2 = getRegister word 8
-                              (ArgR dest1) = getRegister word 12
-                              (ArgR dest2) = getRegister word 16
+                          let (src1,src2,dest1,dest2) = getSMoperands word
                           return $ SMLAL cond s dest1 dest2 src1 src2
                       else empty
+
+getSMoperands :: Word32 -> (Argument Register, Argument Register, Register, Register)
+getSMoperands word = (r1,r2,r3,r4) where r1 = getRegister word 0
+                                         r2 = getRegister word 8
+                                         (ArgR r3) = getRegister word 12
+                                         (ArgR r4) = getRegister word 16
 
 decodeDataOp :: Condition -> G.Get (Argument a, ShiftOp b) -> G.Get Instruction
 decodeDataOp cond parser = do (src2, shft) <- G.lookAhead parser
