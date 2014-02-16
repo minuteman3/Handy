@@ -147,20 +147,43 @@ serialiseInstruction (TST cond src1 src2 shft)        =  serialiseOpcode OpTST
 serialiseInstruction (MUL cond s dest (ArgR src1) (ArgR src2)) =  serialiseCondition cond
                                                               .|. serialiseS s
                                                               .|. serialiseReg 16 dest
-                                                              .|. serialiseReg 8  src1
-                                                              .|. serialiseReg 0  src2
+                                                              .|. serialiseReg 0  src1
+                                                              .|. serialiseReg 8  src2
                                                               .|. bit 4
                                                               .|. bit 7
 
 serialiseInstruction (MLA cond s dest (ArgR src1) (ArgR src2) (ArgR src3)) =  serialiseCondition cond
                                                                           .|. serialiseS s
                                                                           .|. serialiseReg 16 dest
-                                                                          .|. serialiseReg 8  src1
-                                                                          .|. serialiseReg 0  src2
+                                                                          .|. serialiseReg 0  src1
+                                                                          .|. serialiseReg 8  src2
                                                                           .|. serialiseReg 12 src3
                                                                           .|. bit 4
                                                                           .|. bit 7
                                                                           .|. bit 21
+
+serialiseInstruction (SMULL cond s dest1 dest2 (ArgR src1) (ArgR src2)) =  serialiseCondition cond
+                                                                       .|. serialiseS s
+                                                                       .|. serialiseReg 16 dest2
+                                                                       .|. serialiseReg 12 dest1
+                                                                       .|. serialiseReg 8  src2
+                                                                       .|. serialiseReg 0 src1
+                                                                       .|. bit 4
+                                                                       .|. bit 7
+                                                                       .|. bit 22
+                                                                       .|. bit 23
+
+serialiseInstruction (SMLAL cond s dest1 dest2 (ArgR src1) (ArgR src2)) =  serialiseCondition cond
+                                                                       .|. serialiseS s
+                                                                       .|. serialiseReg 16 dest2
+                                                                       .|. serialiseReg 12 dest1
+                                                                       .|. serialiseReg 8  src2
+                                                                       .|. serialiseReg 0 src1
+                                                                       .|. bit 4
+                                                                       .|. bit 7
+                                                                       .|. bit 21
+                                                                       .|. bit 22
+                                                                       .|. bit 23
 
 serialiseInstruction (B cond (ArgC dest)) = serialiseCondition cond
                                          .|. bit 27

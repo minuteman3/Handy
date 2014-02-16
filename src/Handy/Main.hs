@@ -66,5 +66,5 @@ newMachine mem = Machine { registers = blankRegisterFile
                          , executeR  = Nothing
                          }
 
-runCPU :: Program -> IO ((), Machine)
-runCPU prog = runStateT run (newMachine $ toMemory prog)
+runCPU :: Program -> IO Machine
+runCPU prog = execStateT run (newMachine $ toMemory prog)

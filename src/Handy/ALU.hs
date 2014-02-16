@@ -6,8 +6,8 @@ import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Registers
 import Handy.Util
-import Data.Int  (Int32)
-import Data.Word (Word32)
+import Data.Int  (Int32,Int64)
+import Data.Word (Word32,Word64)
 import Data.Bits
 
 compute :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
@@ -30,6 +30,10 @@ compute' (MUL cond _ dest src1 src2) rf sr = computeArith (*) dest src1 src2 con
 
 compute' (MLA cond _ dest src1 src2 src3) rf sr = computeArith (+) dest (ArgR dest) src3 cond sr' rf' setSRarith1
                                       where (rf',sr') = computeArith (*) dest src1 src2 cond sr rf setSRarith1
+
+compute' (SMULL cond _ dest1 dest2 src1 src2) rf sr = computeLongArith (*) dest1 dest2 src1 src2 cond sr rf setSRarithLong
+
+compute' (SMLAL cond _ dest1 dest2 src1 src2) rf sr = computeLongArithAccum (*) dest1 dest2 src1 src2 cond sr rf setSRarithLong
 
 compute' (ADD cond _ dest src1 src2 shft) rf sr = computeArith (+) dest src1 arg2 cond sr rf setSRarith2
                                                 where arg2 = ArgC shiftresult
@@ -126,6 +130,48 @@ computeArith op dest src1 src2 cond sr rf srupdate = case checkCondition cond sr
                                                             rf'    = set rf dest result
                                                             sr'    = srupdate a b result sr
 
+computeLongArith :: (Int64 -> Int64 -> Int64) -> Register -> Register -> Argument Register -> Argument Register -> Condition -> StatusRegister -> RegisterFile -> (Int64 -> StatusRegister -> StatusRegister) -> (RegisterFile, StatusRegister)
+computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate = if checkCondition cond sr then
+                                                                  (rf'', sr')
+                                                                else
+                                                                  (rf, sr) where
+                                                                    a = fromIntegral $ src1 `eval` rf
+                                                                    b = fromIntegral $ src2 `eval` rf
+                                                                    result = a' `op` b'
+                                                                    result_t = fromIntegral $ result `shiftR` 32
+                                                                    result_b = fromIntegral result
+                                                                    rf'  = set rf dest1 result_b
+                                                                    rf'' = set rf' dest2 result_t
+                                                                    sr'  = srupdate result sr
+                                                                    bm   = fromIntegral $ bitmask 32 :: Word64
+                                                                    mask = complement bm
+                                                                    a' = fromIntegral $ if a `testBit` 31 then
+                                                                            a .|. mask
+                                                                         else a
+                                                                    b' = fromIntegral $ if b `testBit` 31 then
+                                                                            b .|. mask
+                                                                         else b
+
+computeLongArithAccum :: (Int64 -> Int64 -> Int64) -> Register -> Register -> Argument Register -> Argument Register -> Condition -> StatusRegister -> RegisterFile -> (Int64 -> StatusRegister -> StatusRegister) -> (RegisterFile, StatusRegister)
+computeLongArithAccum op dest1 dest2 src1 src2 cond sr rf srupdate = if checkCondition cond sr then
+                                                                        (rf''', sr')
+                                                                     else
+                                                                        (rf, sr)
+                            where (rf',_) = computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate
+                                  acc_b  = fromIntegral $ rf `get` dest1 :: Word64
+                                  acc_t  = fromIntegral $ rf `get` dest2 :: Word64
+                                  acc    = (acc_t `shiftL` 32) .|. acc_b
+                                  val_b  = fromIntegral $ rf' `get` dest1 :: Word64
+                                  val_t  = fromIntegral $ rf' `get` dest2 :: Word64
+                                  val    = (val_t `shiftL` 32) .|. val_b
+                                  result = fromIntegral $ acc + val
+                                  result_t = fromIntegral $ result `shiftR` 32 :: Int32
+                                  result_b = fromIntegral $ result :: Int32
+                                  sr'    = srupdate result sr
+                                  rf''   = set rf dest1 result_b
+                                  rf'''  = set rf'' dest2 result_t
+
+
 setSRarith1 :: Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister
 setSRarith1 _ _ result sr = sr { zero = result == 0
                                , negative = result `testBit` 31
@@ -144,6 +190,11 @@ setSRarith3 a b result sr = sr { carry    = not $ isCarry (-) a b
                                , zero = result == 0
                                , negative = result `testBit` 31
                                }
+
+setSRarithLong :: Int64 -> StatusRegister -> StatusRegister
+setSRarithLong result sr = sr { negative = result `testBit` 63
+                              , zero     = result == 0
+                              }
 
 computeShift :: Argument a -> ShiftOp b -> RegisterFile -> StatusRegister -> (Int32, StatusRegister)
 computeShift val NoShift rf sr = (val `eval` rf, sr)

@@ -133,13 +133,16 @@ getS (AND _ s _ _ _ _) = s
 getS (ORR _ s _ _ _ _) = s
 getS (EOR _ s _ _ _ _) = s
 getS (MUL _ s _ _ _)   = s
+getS (SMULL _ s _ _ _ _)   = s
+getS (SMLAL _ s _ _ _ _)   = s
 getS (MLA _ s _ _ _ _)   = s
 getS (MOV _ s _ _ _)   = s
 getS (MVN _ s _ _ _)   = s
 
 getS CMP{} = S
-
-getS _ = undefined
+getS CMN{} = S
+getS TST{} = S
+getS TEQ{} = S
 
 data Instruction where
     ADD  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
@@ -154,6 +157,8 @@ data Instruction where
     RSC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     MUL  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
     MLA  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Argument Register -> Instruction
+    SMULL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
+    SMLAL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
     CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TST  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TEQ  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
@@ -185,6 +190,10 @@ instance Show (Instruction) where
                                            ++ show src1 ++ ", " ++ show src2
     show (MLA cond s dest src1 src2 src3) = "MLA" ++ show cond ++ show s ++ " " ++ show dest ++ ", "
                                             ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show src3
+    show (SMULL cond s dest1 dest2 src1 src2) = "SMULL" ++ show cond ++ show s ++ " " ++ show dest1 ++ ", "
+                                             ++ show dest2 ++ ", " ++ show src1 ++ ", " ++ show src2
+    show (SMLAL cond s dest1 dest2 src1 src2) = "SMLAL" ++ show cond ++ show s ++ " " ++ show dest1 ++ ", "
+                                             ++ show dest2 ++ ", " ++ show src1 ++ ", " ++ show src2
     show (CMP cond src1 src2 shft) = "CMP" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (CMN cond src1 src2 shft) = "CMN" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft
     show (TST cond src1 src2 shft) = "TST" ++ show cond ++ " " ++ show src1 ++ ", " ++ show src2 ++ ", " ++ show shft

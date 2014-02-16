@@ -50,34 +50,63 @@ decode' = do condition <- G.lookAhead decodeCondition
 
 decodeType0 :: Condition -> G.Get Instruction
 decodeType0 cond = decodeDataOp cond decodeDataShiftImm
-                <|> decodeMul cond
+                <|> decodeMultiply cond
                 <|> decodeMisc cond
                 <|> decodeDataOp cond decodeDataShiftReg
                 <|> empty
 
 
 mulMask :: Word32
-mulMask = bit 27 .|. bit 26 .|. bit 25 .|. bit 24 .|. bit 23 .|. bit 22 .|. bit 7 .|. bit 4
+mulMask = bit 27 .|. bit 26 .|. bit 25 .|. bit 24 .|. bit 23 .|. bit 22 .|. bit 21
 
-isMul :: Word32 -> Bool
-isMul word = (word .&. mulMask) == (bit 7 .|. bit 4)
+decodeMultiply :: Condition -> G.Get Instruction
+decodeMultiply cond = do word <- G.lookAhead G.getWord32be
+                         if word `testBit` 4 && word `testBit` 7 then
+                            decodeMUL cond <|> decodeMLA cond <|> decodeSMULL cond <|> decodeSMLAL cond <|> empty
+                         else empty
 
-decodeMul :: Condition -> G.Get Instruction
-decodeMul cond = do word <- G.lookAhead G.getWord32be
-                    if isMul word then do
+decodeMUL :: Condition -> G.Get Instruction
+decodeMUL cond = do word <- G.lookAhead G.getWord32be
+                    if word .&. mulMask == 0 then do
+                        s <- G.lookAhead decodeS
+                        let src1 = getRegister word 0
+                            src2 = getRegister word 8
+                            (ArgR dest) = getRegister word 16
+                        return $ MUL cond s dest src1 src2
+                    else empty
+
+decodeMLA :: Condition -> G.Get Instruction
+decodeMLA cond = do word <- G.lookAhead G.getWord32be
+                    if word .&. mulMask == bit 21 then do
                         s <- G.lookAhead decodeS
                         let src1 = getRegister word 0
                             src2 = getRegister word 8
                             src3 = getRegister word 12
                             (ArgR dest) = getRegister word 16
-                        return $ if word `testBit` 21 then
-                            MLA cond s dest src1 src2 src3
-                        else
-                            MUL cond s dest src1 src2
-                    else
-                        empty
+                        return $ MLA cond s dest src1 src2 src3
+                    else empty
 
+decodeSMULL :: Condition -> G.Get Instruction
+decodeSMULL cond = do word <- G.lookAhead G.getWord32be
+                      if word .&. mulMask == (bit 23 .|. bit 22) then do
+                          s <- G.lookAhead decodeS
+                          let src1 = getRegister word 0
+                              src2 = getRegister word 8
+                              (ArgR dest1) = getRegister word 12
+                              (ArgR dest2) = getRegister word 16
+                          return $ SMULL cond s dest1 dest2 src1 src2
+                      else empty
 
+decodeSMLAL :: Condition -> G.Get Instruction
+decodeSMLAL cond = do word <- G.lookAhead G.getWord32be
+                      if word .&. mulMask == (bit 23 .|. bit 22 .|. bit 21) then do
+                          s <- G.lookAhead decodeS
+                          let src1 = getRegister word 0
+                              src2 = getRegister word 8
+                              (ArgR dest1) = getRegister word 12
+                              (ArgR dest2) = getRegister word 16
+                          return $ SMLAL cond s dest1 dest2 src1 src2
+                      else empty
 
 decodeDataOp :: Condition -> G.Get (Argument a, ShiftOp b) -> G.Get Instruction
 decodeDataOp cond parser = do (src2, shft) <- G.lookAhead parser
