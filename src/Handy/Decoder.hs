@@ -12,8 +12,8 @@ import Control.Applicative
 
 
 decode :: Maybe B.ByteString -> Maybe Instruction
-decode Nothing   = Nothing
-decode (Just iw) = Just $ G.runGet decode' iw
+decode iw = do instruction <- iw
+               return $ G.runGet decode' instruction
 
 decode' :: G.Get Instruction
 decode' = do condition <- G.lookAhead decodeCondition
