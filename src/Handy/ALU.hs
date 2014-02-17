@@ -196,6 +196,47 @@ setSRarithLong result sr = sr { negative = result `testBit` 63
                               , zero     = result == 0
                               }
 
+computeAddress :: AddressingModeMain -> RegisterFile -> StatusRegister -> (Word32,RegisterFile)
+computeAddress (ImmPreIndex (ArgR rn) (ArgC imm) u o) rf _ = (fromIntegral result, rf') where
+                                                               result = a `op` b
+                                                               op = case o of
+                                                                   Up   -> (+)
+                                                                   Down -> (-)
+                                                               a = rf `get` rn
+                                                               b = fromIntegral imm
+                                                               rf' = case u of
+                                                                       Update -> set rf rn result
+                                                                       NoUpdate -> rf
+
+computeAddress (RegPreIndex (ArgR rn) (ArgR rm) shft u o) rf sr = (fromIntegral result, rf') where
+                                                                  result = a `op` b
+                                                                  op = case o of
+                                                                          Up   -> (+)
+                                                                          Down -> (-)
+                                                                  a = rf `get` rn
+                                                                  (b,_) = computeShift (ArgR rm) shft rf sr
+                                                                  rf' = case u of
+                                                                          Update -> set rf rn result
+                                                                          NoUpdate -> rf
+
+computeAddress (ImmPostIndex (ArgR rn) (ArgC imm) o) rf _ = (fromIntegral result, rf') where
+                                                             result = rf `get` rn
+                                                             op = case o of
+                                                                    Up -> (+)
+                                                                    Down -> (-)
+                                                             a = rf `get` rn
+                                                             b = fromIntegral imm
+                                                             rf' = set rf rn (a `op` b)
+
+computeAddress (RegPostIndex (ArgR rn) (ArgR rm) shft o) rf sr = (fromIntegral result, rf') where
+                                                                  result = rf `get` rn
+                                                                  op = case o of
+                                                                         Up   -> (+)
+                                                                         Down -> (-)
+                                                                  a = rf `get` rn
+                                                                  (b,_) = computeShift (ArgR rm) shft rf sr
+                                                                  rf' = set rf rn (a `op` b)
+
 computeShift :: Argument a -> ShiftOp b -> RegisterFile -> StatusRegister -> (Int32, StatusRegister)
 computeShift val NoShift rf sr = (val `eval` rf, sr)
 computeShift val (RRX) rf sr = computeRotateR (val `eval` rf) (ArgC 0) rf sr

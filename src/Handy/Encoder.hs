@@ -80,6 +80,32 @@ serialiseLSR = bit 5
 serialiseASR = bit 6
 serialiseROR = bit 6 .|. bit 5
 
+serialiseUpdate :: UpdateReg -> Word32
+serialiseUpdate u = fromIntegral (fromEnum u) `shiftL` 21
+
+serialiseOffsetDir :: OffsetDir -> Word32
+serialiseOffsetDir o = fromIntegral (fromEnum o) `shiftL` 23
+
+serialiseAddressingMode :: AddressingModeMain -> Word32
+serialiseAddressingMode (ImmPreIndex (ArgR rn) (ArgC imm) u o) =  serialiseReg 16 rn
+                                                              .|. (fromIntegral imm .&. bitmask 12)
+                                                              .|. serialiseUpdate u
+                                                              .|. serialiseOffsetDir o
+                                                              .|. bit 24
+
+serialiseAddressingMode (RegPreIndex (ArgR rn) rm shft u o) =  serialiseReg 16 rn
+                                                           .|. serialiseShift rm shft
+                                                           .|. serialiseUpdate u
+                                                           .|. serialiseOffsetDir o
+                                                           .|. bit 24
+
+serialiseAddressingMode (ImmPostIndex (ArgR rn) (ArgC imm) o) = serialiseReg 16 rn
+                                                             .|. (fromIntegral imm .&. bitmask 12)
+                                                             .|. serialiseOffsetDir o
+serialiseAddressingMode (RegPostIndex (ArgR rn) rm shft o) = serialiseReg 16 rn
+                                                          .|. serialiseShift rm shft
+                                                          .|. serialiseOffsetDir o
+
 serialiseOpcode :: Opcode -> Word32
 serialiseOpcode op = (fromIntegral . fromEnum $ op) `shiftL` 21
 
@@ -201,3 +227,27 @@ serialiseInstruction (BX cond (ArgR dest)) =  serialiseCondition cond
                                           .|. bit 21
                                           .|. bit 4
                                           .|. serialiseReg 0 dest
+
+serialiseInstruction (LDR cond (ArgR src) addrm) = serialiseCondition cond
+                                                .|. bit 26
+                                                .|. bit 20
+                                                .|. serialiseAddressingMode addrm
+                                                .|. serialiseReg 12 src
+
+serialiseInstruction (LDRB cond (ArgR src) addrm) = serialiseCondition cond
+                                                 .|. bit 26
+                                                 .|. bit 22
+                                                 .|. bit 20
+                                                 .|. serialiseAddressingMode addrm
+                                                 .|. serialiseReg 12 src
+
+serialiseInstruction (STR cond (ArgR src) addrm) = serialiseCondition cond
+                                                .|. bit 26
+                                                .|. serialiseAddressingMode addrm
+                                                .|. serialiseReg 12 src
+
+serialiseInstruction (STRB cond (ArgR src) addrm) = serialiseCondition cond
+                                                 .|. bit 26
+                                                 .|. bit 22
+                                                 .|. serialiseAddressingMode addrm
+                                                 .|. serialiseReg 12 src

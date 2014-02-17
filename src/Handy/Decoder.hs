@@ -31,9 +31,9 @@ decode' = do condition <- G.lookAhead decodeCondition
                                                            -- Undefined instruction OR
                                                            -- Move immediate to status register
 
-                           2 -> return JunkInstruction -- Load/store immediate offset
+                           2 -> decodeType2 condition -- Load/store immediate offset
 
-                           3 -> return JunkInstruction -- Load/store register offset OR
+                           3 -> decodeType3 condition -- Load/store register offset OR
                                                            -- Media instruction OR
                                                            -- Architecturally undefined
 
@@ -54,6 +54,12 @@ decodeType0 cond = decodeDataOp cond decodeDataShiftImm
                 <|> decodeMisc cond
                 <|> decodeDataOp cond decodeDataShiftReg
                 <|> empty
+
+decodeType2 :: Condition -> G.Get Instruction
+decodeType2 cond = decodeLoadStore cond decodeAddrImm <|> empty
+
+decodeType3 :: Condition -> G.Get Instruction
+decodeType3 cond = decodeLoadStore cond decodeAddrReg <|> empty
 
 
 mulMask :: Word32
@@ -116,7 +122,35 @@ decodeDataOp cond parser = do (src2, shft) <- G.lookAhead parser
                               dest <- G.lookAhead decodeRegisterDest
                               makeInstruction opcode cond s dest src1 src2 shft
 
+decodeLoadStore :: Condition -> G.Get AddressingModeMain -> G.Get Instruction
+decodeLoadStore cond parser = do word <- G.lookAhead G.getWord32be
+                                 addrm <- G.lookAhead parser
+                                 let reg1 = getRegister word 12
+                                 return $ case (word `testBit` 22, word `testBit` 20) of
+                                            (False,False) -> STR cond reg1 addrm
+                                            (False,True)  -> LDR cond reg1 addrm
+                                            (True,False)  -> STRB cond reg1 addrm
+                                            (True,True)   -> LDRB cond reg1 addrm
 
+decodeAddrImm :: G.Get AddressingModeMain
+decodeAddrImm = do word <- G.lookAhead G.getWord32be
+                   let o = if word `testBit` 23 then Up else Down
+                       update = if word `testBit` 21 then Update else NoUpdate
+                       offset = ArgC $ fromIntegral $ word .&. bitmask 12
+                       pre = word `testBit` 24
+                       reg = getRegister word 16
+                   return $ if pre then ImmPreIndex reg offset update o
+                            else ImmPostIndex reg offset o
+
+decodeAddrReg :: G.Get AddressingModeMain
+decodeAddrReg = do word <- G.lookAhead G.getWord32be
+                   let o = if word `testBit` 23 then Up else Down
+                       update = if word `testBit` 21 then Update else NoUpdate
+                       pre = word `testBit` 24
+                       rn = getRegister word 16
+                   (rm,shft) <- decodeDataShiftImm
+                   return $ if pre then RegPreIndex rn rm shft update o
+                                   else RegPostIndex rn rm shft o
 
 decodeMisc :: Condition -> G.Get Instruction
 decodeMisc cond = do word <- G.lookAhead G.getWord32be

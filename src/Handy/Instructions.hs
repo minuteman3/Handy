@@ -144,6 +144,44 @@ getS CMN{} = S
 getS TST{} = S
 getS TEQ{} = S
 
+data UpdateReg = NoUpdate
+               | Update
+               deriving (Enum,Eq)
+
+instance Show UpdateReg where
+    show NoUpdate = ""
+    show Update   = "!"
+
+data OffsetDir = Down
+               | Up
+               deriving (Enum,Eq)
+
+instance Show OffsetDir where
+    show Down = "-"
+    show Up   = ""
+
+
+data AddressingModeMain = ImmPreIndex (Argument Register) (Argument Constant) UpdateReg OffsetDir
+                        | RegPreIndex (Argument Register) (Argument Register) (ShiftOp Constant) UpdateReg OffsetDir
+                        | ImmPostIndex (Argument Register) (Argument Constant) OffsetDir
+                        | RegPostIndex (Argument Register) (Argument Register) (ShiftOp Constant) OffsetDir
+
+showImmediateOffset :: Argument Constant -> OffsetDir -> String
+showImmediateOffset (ArgC imm) o = "#" ++ show o ++ show imm
+
+instance Show AddressingModeMain where
+    show (ImmPreIndex rn imm u o) = "[" ++ show rn ++ ", " ++ showImmediateOffset imm o ++ "]" ++ show u
+    show (RegPreIndex rn rm shft u o) = "[" ++ show rn ++ ", " ++ show o ++ show rm ++ shift ++ "]" ++ show u
+                    where shift = case shft of
+                                    (LSL (ArgC 0)) -> ""
+                                    _              -> show shft
+
+    show (ImmPostIndex rn imm o) = "[" ++ show rn ++ "], " ++ showImmediateOffset imm o
+    show (RegPostIndex rn rm shft o) = "[" ++ show rn ++ "], " ++ show o ++ show rm ++ shift
+                    where shift = case shft of
+                                    (LSL (ArgC 0)) -> ""
+                                    _              -> show shft
+
 data Instruction where
     ADD  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
     SUB  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
@@ -170,6 +208,11 @@ data Instruction where
     BX   :: Condition -> Argument Register -> Instruction
     HALT :: Instruction
     JunkInstruction :: Instruction
+    LDR  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    LDRB :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    STR  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    STRB :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+
 
 -- FIXME: This is a pretty horrible hack
 instance Eq Instruction where
@@ -207,6 +250,10 @@ instance Show (Instruction) where
     show (BL cond src1)            = "BL " ++ show cond ++ " " ++ show src1
     show (HALT)               = ""
     show (JunkInstruction)    = "Junk"
+    show (LDR cond src dest)  = "LDR" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
+    show (LDRB cond src dest) = "LDRB" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
+    show (STR cond src dest)  = "STR" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
+    show (STRB cond src dest) = "STRB" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
 
 stringify3aryOp :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
 stringify3aryOp cond s dest src1 src2 shft = show cond ++ show s ++ " " ++ show dest ++ ", " ++ show src1
