@@ -64,6 +64,16 @@ testProg5 = [MOV AL NoS R0 (ArgC 128) NoShift
             ,STRB AL (ArgR R0) (ImmPostIndex (ArgR R0) (ArgC 1) Up)
             ,HALT]
 
+testProg6 :: Program
+testProg6 = [MOV AL NoS R0 (ArgC 128) NoShift
+            ,MOV AL NoS R1 (ArgC 1)   NoShift
+            ,MOV AL NoS R2 (ArgC 2)   NoShift
+            ,MOV AL NoS R3 (ArgC 3)   NoShift
+            ,STM AL EA (ArgR R0) NoUpdate [R1,R2,R3]
+            ,LDM AL EA (ArgR R0) Update   [R4,R5,R6]
+            ,HALT
+            ]
+
 newMachine :: Memory -> Machine
 newMachine mem = Machine { registers = blankRegisterFile
                          , memory    = mem

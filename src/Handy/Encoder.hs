@@ -106,6 +106,16 @@ serialiseAddressingMode (RegPostIndex (ArgR rn) rm shft o) = serialiseReg 16 rn
                                                           .|. serialiseShift rm shft
                                                           .|. serialiseOffsetDir o
 
+serialiseAddresingModeMulti :: AddressingModeMulti -> Word32
+serialiseAddresingModeMulti IA = bit 23
+serialiseAddresingModeMulti IB = bit 24 .|. bit 23
+serialiseAddresingModeMulti DA = 0
+serialiseAddresingModeMulti DB = bit 24
+serialiseAddresingModeMulti EA = serialiseAddresingModeMulti IA
+serialiseAddresingModeMulti FA = serialiseAddresingModeMulti IB
+serialiseAddresingModeMulti ED = serialiseAddresingModeMulti DA
+serialiseAddresingModeMulti FD = serialiseAddresingModeMulti DB
+
 serialiseOpcode :: Opcode -> Word32
 serialiseOpcode op = (fromIntegral . fromEnum $ op) `shiftL` 21
 
@@ -133,6 +143,17 @@ serialise2aryInstruction' cond s dest (ArgR reg1) src2 shft =  serialiseConditio
                                                            .|. serialiseReg 12 dest
                                                            .|. serialiseReg 16 reg1
                                                            .|. serialiseShift src2 shft
+
+serialiseRegList :: [Register] -> Word32
+serialiseRegList = serialiseRegList' 0
+
+serialiseRegList' :: Word32 -> [Register] -> Word32
+serialiseRegList' val (None:regs) = serialiseRegList' val regs
+serialiseRegList' val (PC:regs) = serialiseRegList' val (R15:regs)
+serialiseRegList' val (LR:regs) = serialiseRegList' val (R14:regs)
+serialiseRegList' val (SP:regs) = serialiseRegList' val (R13:regs)
+serialiseRegList' val (rn:regs) = serialiseRegList' (val .|. bit (fromIntegral $ fromEnum rn)) regs
+serialiseRegList' val []        = val
 
 
 serialiseInstruction :: Instruction -> Word32
@@ -251,3 +272,13 @@ serialiseInstruction (STRB cond (ArgR src) addrm) = serialiseCondition cond
                                                  .|. bit 22
                                                  .|. serialiseAddressingMode addrm
                                                  .|. serialiseReg 12 src
+
+serialiseInstruction (STM cond addrm (ArgR addr) update regs) =  serialiseCondition cond
+                                                             .|. bit 27
+                                                             .|. serialiseAddresingModeMulti addrm
+                                                             .|. serialiseUpdate update
+                                                             .|. serialiseReg 16 addr
+                                                             .|. serialiseRegList regs
+
+serialiseInstruction (LDM cond addrm addr update regs) =  serialiseInstruction (STM cond addrm addr update regs)
+                                                      .|. bit 20

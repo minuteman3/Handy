@@ -12,6 +12,7 @@ import qualified Handy.Registers as Reg
 
 import Control.Monad.State
 import Data.Int (Int32)
+import Data.Bits ((.&.))
 import qualified Data.ByteString.Lazy as B
 
 type InstructionWord = B.ByteString
@@ -34,7 +35,7 @@ run = do
     running <- gets executing
     when running $ do
         modify pipeline
-        execute =<< gets executeR 
+        execute =<< gets executeR
         modify incPC
         run
 
@@ -59,7 +60,7 @@ setRegister r v machine = machine { registers = Reg.set (registers machine) r v 
 
 incPC :: Machine -> Machine
 incPC machine = let pc = registers machine `Reg.get` Reg.PC in
-                  setRegister Reg.PC (pc + 4) machine
+                  setRegister Reg.PC ((pc .&. 0xFFFFFFFC) + 4) machine
 
 execute :: Maybe Instruction -> Run ()
 execute Nothing = return ()
@@ -118,7 +119,56 @@ execute' (STRB cond (ArgR src) addrm) = do machine@(Machine rf mem sr _ _ _ _) <
                                                  mem' = writeByte mem addr (fromIntegral (rf  `Reg.get` src))
                                              put $ machine { registers = rf', memory = mem' }
 
+execute' (STM cond addrm (ArgR src) update regs) = do machine@(Machine rf mem sr _ _ _ _) <- get
+                                                      when (checkCondition cond sr) $ do
+                                                       let addr = rf `Reg.get` src
+                                                           (start,end) = computeStartEnd addr addrm regs
+                                                           range = [start,start+4,end]
+                                                           vals = map (Reg.get rf) regs
+                                                           assoc = zip range vals
+                                                           mem' = foldl writeMem mem assoc
+                                                           rf' = if update == Update then
+                                                                    updateReg start end addrm rf src
+                                                                 else rf
+                                                       put $ machine { registers = rf', memory = mem' }
+
+execute' (LDM cond addrm (ArgR src) update regs) = do machine@(Machine rf mem sr _ _ _ _) <- get
+                                                      when (checkCondition cond sr) $ do
+                                                          let addr = rf `Reg.get` src
+                                                              (start,end) =  computeStartEnd addr addrm regs
+                                                              range = map fromIntegral [start,start+4,end]
+                                                              vals = map (getWord mem) range
+                                                              assoc = zip regs vals
+                                                              rf' = foldl writeReg rf assoc
+                                                              rf'' = if update == Update then
+                                                                        updateReg start end addrm rf' src
+                                                                     else rf'
+                                                          put $ machine { registers = rf'' }
+
+
+
 execute' i = do machine <- get
                 when (checkCondition (getCondition i) (cpsr machine)) $ do
                     let (rf,sr) = compute i (registers machine) (cpsr machine)
                     put $ machine { cpsr = sr, registers = rf }
+
+writeReg :: Integral a => Reg.RegisterFile -> (Reg.Register, a) -> Reg.RegisterFile
+writeReg rf (reg,v) = Reg.set rf reg (fromIntegral v)
+
+writeMem :: Memory -> (Int32, Int32) -> Memory
+writeMem mem (addr,v) = writeWord mem (fromIntegral addr) (fromIntegral v)
+
+computeStartEnd :: Int32 -> AddressingModeMulti -> [Reg.Register] -> (Int32,Int32)
+computeStartEnd addr addrm regs = (fromIntegral start, fromIntegral end)
+                                    where (start, end)  = case addrm of
+                                                    IA -> (addr, addr + fromIntegral (length regs) * 4 - 4)
+                                                    IB -> (addr + 4, addr + fromIntegral (length regs) * 4)
+                                                    DA -> (addr - fromIntegral (length regs) * 4 + 4, addr)
+                                                    DB -> (addr - fromIntegral (length regs) * 4, addr - 4)
+
+updateReg :: Int32 -> Int32 -> AddressingModeMulti -> Reg.RegisterFile -> Reg.Register -> Reg.RegisterFile
+updateReg start end addrm rf src = rf' where rf' = case addrm of
+                                                     IA -> Reg.set rf src (end + 4)
+                                                     IB -> Reg.set rf src end
+                                                     DA -> Reg.set rf src (start - 4)
+                                                     DB -> Reg.set rf src start

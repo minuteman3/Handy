@@ -182,36 +182,48 @@ instance Show AddressingModeMain where
                                     (LSL (ArgC 0)) -> ""
                                     _              -> show shft
 
+data AddressingModeMulti = IA
+                         | IB
+                         | DA
+                         | DB
+                         | EA
+                         | FA
+                         | ED
+                         | FD
+                         deriving (Show, Eq, Enum)
+
 data Instruction where
-    ADD  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    SUB  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    RSB  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    AND  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    ORR  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    EOR  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    BIC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    ADC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    SBC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    RSC  :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
-    MUL  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
-    MLA  :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Argument Register -> Instruction
+    ADD   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    SUB   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    RSB   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    AND   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    ORR   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    EOR   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    BIC   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    ADC   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    SBC   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    RSC   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    MUL   :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
+    MLA   :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Argument Register -> Instruction
     SMULL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
     SMLAL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
-    CMP  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
-    TST  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
-    TEQ  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
-    CMN  :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
-    MOV  :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
-    MVN  :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
-    B    :: Condition -> Argument Constant  -> Instruction
-    BL   :: Condition -> Argument Constant  -> Instruction
-    BX   :: Condition -> Argument Register -> Instruction
-    HALT :: Instruction
+    CMP   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    TST   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    TEQ   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    CMN   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
+    MOV   :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
+    MVN   :: Condition -> S -> Destination -> Argument a -> ShiftOp b -> Instruction
+    B     :: Condition -> Argument Constant  -> Instruction
+    BL    :: Condition -> Argument Constant  -> Instruction
+    BX    :: Condition -> Argument Register -> Instruction
+    LDR   :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    LDRB  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    STR   :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    STRB  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
+    LDM   :: Condition -> AddressingModeMulti -> Argument Register -> UpdateReg -> [Register] -> Instruction
+    STM   :: Condition -> AddressingModeMulti -> Argument Register -> UpdateReg -> [Register] -> Instruction
+    HALT  :: Instruction
     JunkInstruction :: Instruction
-    LDR  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
-    LDRB :: Condition -> Argument Register -> AddressingModeMain -> Instruction
-    STR  :: Condition -> Argument Register -> AddressingModeMain -> Instruction
-    STRB :: Condition -> Argument Register -> AddressingModeMain -> Instruction
 
 
 -- FIXME: This is a pretty horrible hack
@@ -254,6 +266,14 @@ instance Show (Instruction) where
     show (LDRB cond src dest) = "LDRB" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
     show (STR cond src dest)  = "STR" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
     show (STRB cond src dest) = "STRB" ++ show cond ++ " " ++ show src ++ ", " ++ show dest
+    show (STM cond addrm addr update regs) = "STM" ++ show cond ++ show addrm ++ " " ++ show addr ++ show update ++ ", " ++ "{" ++ stringifyRegList (init regs) ++ show (last regs) ++ "}"
+    show (LDM cond addrm addr update regs) = "LDM" ++ show cond ++ show addrm ++ " " ++ show addr ++ show update ++ ", " ++ "{" ++ stringifyRegList (init regs) ++ show (last regs) ++ "}"
+
+stringifyRegList :: [Register] -> String
+stringifyRegList = concatMap stringifyRegList'
+
+stringifyRegList' :: Register -> String
+stringifyRegList' x = show x ++ ", "
 
 stringify3aryOp :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> String
 stringify3aryOp cond s dest src1 src2 shft = show cond ++ show s ++ " " ++ show dest ++ ", " ++ show src1

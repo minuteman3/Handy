@@ -37,7 +37,7 @@ decode' = do condition <- G.lookAhead decodeCondition
                                                            -- Media instruction OR
                                                            -- Architecturally undefined
 
-                           4 -> return JunkInstruction -- Load/store multiple
+                           4 -> decodeType4 condition -- Load/store multiple
 
                            5 -> decodeType5 condition     -- Branch/Branch Link
 
@@ -48,18 +48,24 @@ decode' = do condition <- G.lookAhead decodeCondition
                                                            -- Software interrupt
                            _ -> fail "Invalid instruction type"
 
+junk :: G.Get Instruction
+junk = return JunkInstruction
+
 decodeType0 :: Condition -> G.Get Instruction
 decodeType0 cond = decodeDataOp cond decodeDataShiftImm
                 <|> decodeMultiply cond
                 <|> decodeMisc cond
                 <|> decodeDataOp cond decodeDataShiftReg
-                <|> empty
+                <|> junk
 
 decodeType2 :: Condition -> G.Get Instruction
-decodeType2 cond = decodeLoadStore cond decodeAddrImm <|> empty
+decodeType2 cond = decodeLoadStore cond decodeAddrImm
 
 decodeType3 :: Condition -> G.Get Instruction
-decodeType3 cond = decodeLoadStore cond decodeAddrReg <|> empty
+decodeType3 cond = decodeLoadStore cond decodeAddrReg
+
+decodeType4 :: Condition -> G.Get Instruction
+decodeType4 = decodeLoadStoreMulti
 
 
 mulMask :: Word32
@@ -132,6 +138,28 @@ decodeLoadStore cond parser = do word <- G.lookAhead G.getWord32be
                                             (True,False)  -> STRB cond reg1 addrm
                                             (True,True)   -> LDRB cond reg1 addrm
 
+decodeLoadStoreMulti :: Condition -> G.Get Instruction
+decodeLoadStoreMulti cond = do word <- G.lookAhead G.getWord32be
+                               addrm <- G.lookAhead decodeAddrModeMulti
+                               let update = if word `testBit` 21 then Update else NoUpdate
+                                   addr   = getRegister word 16
+                                   regs   = getRegisterList word
+                               return $ if word `testBit` 20 then
+                                            LDM cond addrm addr update regs
+                                        else
+                                            STM cond addrm addr update regs
+
+decodeAddrModeMulti :: G.Get AddressingModeMulti
+decodeAddrModeMulti = do word <- G.lookAhead G.getWord32be
+                         return $ case (word `testBit` 24, word `testBit` 23) of
+                                    (False,False) -> DA
+                                    (False,True)  -> IA
+                                    (True,False)  -> DB
+                                    (True,True)   -> IB
+
+getRegisterList :: Word32 -> [Register]
+getRegisterList word = map toEnum $ filter (testBit word) [0..15]
+
 decodeAddrImm :: G.Get AddressingModeMain
 decodeAddrImm = do word <- G.lookAhead G.getWord32be
                    let o = if word `testBit` 23 then Up else Down
@@ -163,7 +191,7 @@ decodeMisc cond = do word <- G.lookAhead G.getWord32be
 
 
 decodeType1 :: Condition -> G.Get Instruction
-decodeType1 cond = decodeDataOp cond decodeLiteral <|> decodeMSR <|> decodeUndefined <|> empty
+decodeType1 cond = decodeDataOp cond decodeLiteral <|> decodeMSR <|> decodeUndefined <|> junk
 
 opcodeMask :: Word32
 opcodeMask = bitmask 4 `shiftL` 21
