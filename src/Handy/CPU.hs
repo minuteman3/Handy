@@ -63,7 +63,10 @@ incPC machine = let pc = registers machine `Reg.get` Reg.PC in
 
 execute :: Maybe Instruction -> Run ()
 execute Nothing = return ()
-execute (Just i) = execute' i
+execute (Just i) = do rf_pre <- gets registers
+                      execute' i
+                      rf_post <- gets registers
+                      when (rf_pre `Reg.get` Reg.PC /= rf_post `Reg.get` Reg.PC) $ modify flushPipeline
 
 execute' :: Instruction -> Run ()
 
@@ -75,7 +78,6 @@ execute' (B cond src) = do machine <- get
                            when (checkCondition cond $ cpsr machine) $ do
                                let (rf,_) = computeBranch src cond (registers machine) (cpsr machine)
                                put $ machine { registers = rf }
-                               modify flushPipeline
 
 execute' (BL cond src) = do machine <- get
                             let rf = registers machine
@@ -91,21 +93,18 @@ execute' (BX cond src) = do machine <- get
                                 let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
                                 let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
                                 put $ machine { registers = rf'' }
-                                modify flushPipeline
 
 execute' (LDR cond (ArgR dest) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
                                            when (checkCondition cond sr) $ do
                                                 let (addr,rf') = computeAddress addrm rf sr
                                                     rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
                                                 put $ machine { registers = rf'' }
-                                                when (dest == Reg.PC || dest == Reg.R15) $ modify flushPipeline
 
 execute' (LDRB cond (ArgR dest) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
                                             when (checkCondition cond sr) $ do
                                               let (addr,rf') = computeAddress addrm rf sr
                                                   rf'' = Reg.set rf' dest (fromIntegral (mem `getByte` addr))
                                               put $ machine { registers = rf'' }
-                                              when (dest == Reg.PC || dest == Reg.R15) $ modify flushPipeline
 
 execute' (STR cond (ArgR src) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
                                           when (checkCondition cond sr) $ do
