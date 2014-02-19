@@ -74,6 +74,12 @@ testProg6 = [MOV AL NoS R0 (ArgC 128) NoShift
             ,HALT
             ]
 
+testProg7 :: Program
+testProg7 = [MVN AL NoS R0 (ArgC 0) NoShift
+            ,MOV AL NoS R1 (ArgC 50) NoShift
+            ,SMULL AL NoS R2 R3 (ArgR R0) (ArgR R1)
+            ,HALT]
+
 newMachine :: Memory -> Machine
 newMachine mem = Machine { registers = blankRegisterFile
                          , memory    = mem
