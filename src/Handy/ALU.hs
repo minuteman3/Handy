@@ -127,48 +127,72 @@ computeArith :: (Int32 -> Int32 -> Int32)
               -> (Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister)
               -> (RegisterFile, StatusRegister)
 
-computeArith op dest src1 src2 cond sr rf srupdate = case checkCondition cond sr of
-                                                        False -> (rf, sr)
-                                                        True  -> (rf', sr') where
-                                                            a = src1 `eval` rf
-                                                            b = src2 `eval` rf
-                                                            result = a `op` b
-                                                            rf'    = set rf dest result
-                                                            sr'    = srupdate a b result sr
+computeArith op dest src1 src2 cond sr rf srupdate =
+    case checkCondition cond sr of
+        False -> (rf, sr)
+        True  -> (rf', sr') where
+            a      = src1 `eval` rf
+            b      = src2 `eval` rf
+            result = a `op` b
+            rf'    = set rf dest result
+            sr'    = srupdate a b result sr
 
-computeLongArith :: (Bits a, Num a, Integral a) => (a -> a -> a) -> Register -> Register -> Argument Register -> Argument Register -> Condition -> StatusRegister -> RegisterFile -> (a -> StatusRegister -> StatusRegister) -> (RegisterFile, StatusRegister)
-computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate = if checkCondition cond sr then
-                                                                  (rf'', sr')
-                                                                else
-                                                                  (rf, sr) where
-                                                                    a = fromIntegral $ src1 `eval` rf
-                                                                    b = fromIntegral $ src2 `eval` rf
-                                                                    result = a `op` b
-                                                                    result_t = fromIntegral $ result `shiftR` 32
-                                                                    result_b = fromIntegral result
-                                                                    rf'  = set rf dest1 result_b
-                                                                    rf'' = set rf' dest2 result_t
-                                                                    sr'  = srupdate result sr
+computeLongArith :: (Bits a, Num a, Integral a)
+                 => (a -> a -> a)
+                 -> Register
+                 -> Register
+                 -> Argument Register
+                 -> Argument Register
+                 -> Condition
+                 -> StatusRegister
+                 -> RegisterFile
+                 -> (a -> StatusRegister -> StatusRegister)
+                 -> (RegisterFile, StatusRegister)
 
-computeLongArithAccum :: (Bits a, Num a, Integral a) => (a -> a -> a) -> Register -> Register -> Argument Register -> Argument Register -> Condition -> StatusRegister -> RegisterFile -> (a -> StatusRegister -> StatusRegister) -> (RegisterFile, StatusRegister)
-computeLongArithAccum op dest1 dest2 src1 src2 cond sr rf srupdate = if checkCondition cond sr then
-                                                                        (rf''', sr')
-                                                                     else
-                                                                        (rf, sr)
-                            where (rf',_) = computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate
-                                  acc_b  = fromIntegral $ rf `get` dest1 :: Word64
-                                  acc_t  = fromIntegral $ rf `get` dest2 :: Word64
-                                  acc    = (acc_t `shiftL` 32) .|. acc_b
-                                  val_b  = fromIntegral $ rf' `get` dest1 :: Word64
-                                  val_t  = fromIntegral $ rf' `get` dest2 :: Word64
-                                  val    = (val_t `shiftL` 32) .|. val_b
-                                  result = fromIntegral $ acc + val
-                                  result_t = fromIntegral $ result `shiftR` 32 :: Int32
-                                  result_b = fromIntegral result :: Int32
-                                  sr'    = srupdate result sr
-                                  rf''   = set rf dest1 result_b
-                                  rf'''  = set rf'' dest2 result_t
+computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate =
+    if checkCondition cond sr then
+        (rf'', sr')
+    else
+        (rf, sr)
+    where a        = fromIntegral $ src1 `eval` rf
+          b        = fromIntegral $ src2 `eval` rf
+          result   = a `op` b
+          result_t = fromIntegral $ result `shiftR` 32
+          result_b = fromIntegral result
+          rf'      = set rf dest1 result_b
+          rf''     = set rf' dest2 result_t
+          sr'      = srupdate result sr
 
+computeLongArithAccum :: (Bits a, Num a, Integral a)
+                      => (a -> a -> a)
+                      -> Register
+                      -> Register
+                      -> Argument Register
+                      -> Argument Register
+                      -> Condition
+                      -> StatusRegister
+                      -> RegisterFile
+                      -> (a -> StatusRegister -> StatusRegister)
+                      -> (RegisterFile, StatusRegister)
+
+computeLongArithAccum op dest1 dest2 src1 src2 cond sr rf srupdate =
+    if checkCondition cond sr then
+        (rf''', sr')
+    else
+        (rf, sr)
+    where (rf',_)  = computeLongArith op dest1 dest2 src1 src2 cond sr rf srupdate
+          rf''     = set rf dest1 result_b
+          rf'''    = set rf'' dest2 result_t
+          sr'      = srupdate result sr
+          acc_b    = fromIntegral $ rf `get` dest1 :: Word64
+          acc_t    = fromIntegral $ rf `get` dest2 :: Word64
+          acc      = (acc_t `shiftL` 32) .|. acc_b
+          val_b    = fromIntegral $ rf' `get` dest1 :: Word64
+          val_t    = fromIntegral $ rf' `get` dest2 :: Word64
+          val      = (val_t `shiftL` 32) .|. val_b
+          result   = fromIntegral $ acc + val
+          result_t = fromIntegral $ result `shiftR` 32 :: Int32
+          result_b = fromIntegral result :: Int32
 
 setSRarith1 :: Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister
 setSRarith1 _ _ result sr = sr { zero = result == 0
@@ -195,37 +219,39 @@ setSRarithLong result sr = sr { negative = result `testBit` 63
                               }
 
 computeAddress :: AddressingModeMain -> RegisterFile -> StatusRegister -> (Word32,RegisterFile)
-computeAddress (ImmPreIndex (ArgR rn) (ArgC imm) u o) rf _ = (fromIntegral result, rf') where
-                                                               result = a `op` b
-                                                               op = getDirection o
-                                                               a = rf `get` rn
-                                                               b = fromIntegral imm
-                                                               rf' = case u of
-                                                                       Update -> set rf rn result
-                                                                       NoUpdate -> rf
+computeAddress (ImmPreIndex (ArgR rn) (ArgC imm) u o) rf _ =
+    (fromIntegral result, rf')
+    where result = a `op` b
+          rf'    = case u of
+                      Update -> set rf rn result
+                      NoUpdate -> rf
+          op     = getDirection o
+          a      = rf `get` rn
+          b      = fromIntegral imm
 
-computeAddress (RegPreIndex (ArgR rn) (ArgR rm) shft u o) rf sr = (fromIntegral result, rf') where
-                                                                  result = a `op` b
-                                                                  op = getDirection o
-                                                                  a = rf `get` rn
-                                                                  (b,_) = computeShift (ArgR rm) shft rf sr
-                                                                  rf' = case u of
-                                                                          Update -> set rf rn result
-                                                                          NoUpdate -> rf
+computeAddress (RegPreIndex (ArgR rn) (ArgR rm) shft u o) rf sr =
+    (fromIntegral result, rf')
+    where result = a `op` b
+          rf'    = case u of
+                      Update -> set rf rn result
+                      NoUpdate -> rf
+          op     = getDirection o
+          a      = rf `get` rn
+          (b,_)  = computeShift (ArgR rm) shft rf sr
 
-computeAddress (ImmPostIndex (ArgR rn) (ArgC imm) o) rf _ = (fromIntegral result, rf') where
-                                                             result = rf `get` rn
-                                                             op = getDirection o
-                                                             a = rf `get` rn
-                                                             b = fromIntegral imm
-                                                             rf' = set rf rn (a `op` b)
+computeAddress (ImmPostIndex (ArgR rn) (ArgC imm) o) rf _ =
+    (fromIntegral result, rf')
+    where result = rf `get` rn
+          rf'    = set rf rn (result `op` b)
+          b      = fromIntegral imm
+          op     = getDirection o
 
-computeAddress (RegPostIndex (ArgR rn) (ArgR rm) shft o) rf sr = (fromIntegral result, rf') where
-                                                                  result = rf `get` rn
-                                                                  op = getDirection o
-                                                                  a = rf `get` rn
-                                                                  (b,_) = computeShift (ArgR rm) shft rf sr
-                                                                  rf' = set rf rn (a `op` b)
+computeAddress (RegPostIndex (ArgR rn) (ArgR rm) shft o) rf sr =
+    (fromIntegral result, rf')
+    where result = rf `get` rn
+          rf'    = set rf rn (result `op` b)
+          op     = getDirection o
+          (b,_)  = computeShift (ArgR rm) shft rf sr
 
 getDirection :: (Num a) => OffsetDir -> a -> a -> a
 getDirection o = case o of Up   -> (+)
@@ -262,12 +288,14 @@ computeShiftR :: (Num a, Bits a)
               -> StatusRegister
               -> (a, StatusRegister)
 
-computeShiftR val (ArgC shft) _  sr = (result, sr')
-                                      where degree = fromIntegral shft :: Int
-                                            result | degree == 0 = 0
-                                                   | otherwise = val `shiftL` degree
-                                            sr'    | degree == 0 = sr { carry = val `testBit` 31 }
-                                                   | otherwise = sr { carry = val `testBit` (degree - 1) }
+computeShiftR val (ArgC shft) _  sr =
+
+    (result, sr')
+    where result | degree == 0 = 0
+                 | otherwise = val `shiftL` degree
+          sr'    | degree == 0 = sr { carry = val `testBit` 31 }
+                 | otherwise = sr { carry = val `testBit` (degree - 1) }
+          degree = fromIntegral shft :: Int
 
 computeShiftR val (ArgR shft) rf sr = (result, sr')
                                       where result = val `shiftR` degree
@@ -283,42 +311,46 @@ computeRotateR :: (Num a, Bits a)
                -> StatusRegister
                -> (a, StatusRegister)
 
-computeRotateR val (ArgC shft) _ sr = case shft of
-                                        0 -> (result, sr') where
-                                             c | carry sr  = bit 31
-                                               | otherwise = 0
-                                             result = c .|. (val `shiftR` 1)
-                                             sr' = sr { carry = val `testBit` 0 }
-                                        _ -> (result, sr') where
-                                             degree = fromIntegral shft :: Int
-                                             result = val `rotateR` degree
-                                             sr'    = sr { carry = val `testBit` (degree - 1) }
+computeRotateR val (ArgC shft) _ sr =
 
-computeRotateR val (ArgR shft) rf sr = (result, sr')
-                                       where degree = fromIntegral $ rf `get` shft
-                                             degree' = fromIntegral $ degree .&. bitmask 5
-                                             result | degree  == 0 = val
-                                                    | degree' >  0 = val `rotateR` degree'
-                                             sr'    | degree  == 0 = sr
-                                                    | degree' == 0 = sr { carry = val `testBit` 31 }
-                                                    | degree' >  0 = sr { carry = val `testBit` (degree' - 1) }
+    case shft of
+        0 -> (result, sr') where c | carry sr  = bit 31
+                                   | otherwise = 0
+                                 result        = c .|. (val `shiftR` 1)
+                                 sr'           = sr { carry = val `testBit` 0 }
+        _ -> (result, sr') where
+             degree = fromIntegral shft :: Int
+             result = val `rotateR` degree
+             sr'    = sr { carry = val `testBit` (degree - 1) }
+
+computeRotateR val (ArgR shft) rf sr =
+
+    (result, sr')
+    where result | degree  == 0 = val
+                 | degree' >  0 = val `rotateR` degree'
+          sr'    | degree  == 0 = sr
+                 | degree' == 0 = sr { carry = val `testBit` 31 }
+                 | degree' >  0 = sr { carry = val `testBit` (degree' - 1) }
+          degree                = fromIntegral $ rf `get` shft
+          degree'               = fromIntegral $ degree .&. bitmask 5
 
 -- computeBranchOffset src := (SignExtend_30(signed_immed_24(src)) << 2)
 
 -- This is semantically consistent with the ISA defined behaviour for arguments
 -- to the B and BL instructions.
 computeBranchOffset :: Argument Constant -> Argument Constant
-computeBranchOffset (ArgC val) = ArgC result
-                                 where src = fromIntegral mask .&. val
-                                       se_src = if src `testBit` 23
-                                                then src .|. fromIntegral (complement mask)
-                                                else src
-                                       result = se_src `shiftL` 2
-                                       mask = bitmask 24
+computeBranchOffset (ArgC val) =
+
+    ArgC result
+    where result                    = se_src `shiftL` 2
+          se_src | src `testBit` 23 = src .|. fromIntegral (complement mask)
+                 | otherwise        = src
+          src                       = fromIntegral mask .&. val
+          mask                      = bitmask 24
 
 
 checkCondition :: Condition -> StatusRegister -> Bool
-checkCondition AL _ = True
+checkCondition AL _    = True
 checkCondition EQ cpsr = zero cpsr
 checkCondition CS cpsr = carry cpsr
 checkCondition MI cpsr = negative cpsr
