@@ -75,8 +75,9 @@ testProg6 = [MOV AL NoS R0 (ArgC 128) NoShift
             ]
 
 testProg7 :: Program
-testProg7 = [MVN AL NoS R0 (ArgC 0) NoShift
-            ,MOV AL NoS R1 (ArgC 50) NoShift
+testProg7 = [MOV AL NoS R0 (ArgC 1) NoShift
+            ,MOV AL NoS R0 (ArgR R0) (ROR (ArgC 1))
+            ,MOV AL NoS R1 (ArgC 2) NoShift
             ,SMULL AL NoS R2 R3 (ArgR R0) (ArgR R1)
             ,HALT]
 
