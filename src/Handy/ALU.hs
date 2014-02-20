@@ -16,13 +16,19 @@ umul = (*)
 smul :: Int64 -> Int64 -> Int64
 smul = (*)
 
-compute :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
+compute :: Instruction
+        -> RegisterFile
+        -> StatusRegister
+        -> (RegisterFile, StatusRegister)
 compute i rf sr = (rf',sr'') where (rf',sr') = compute' i rf sr
                                    sr''      = case getS i of
                                                    S   -> sr'
                                                    NoS -> sr
 
-compute' :: Instruction -> RegisterFile -> StatusRegister -> (RegisterFile, StatusRegister)
+compute' :: Instruction
+         -> RegisterFile
+         -> StatusRegister
+         -> (RegisterFile, StatusRegister)
 
 compute' (MOV cond _ dest src shft) rf sr =
     computeArith const dest arg arg cond sr' rf setSRarith1
@@ -128,12 +134,12 @@ computeAdc sr x y = x + y + if carry sr then 1 else 0
 computeSbc :: Num a => StatusRegister -> a -> a -> a
 computeSbc sr x y = x + y + if not $ carry sr then 1 else 0
 
-computeBranch :: Argument a 
-              -> Condition 
-              -> RegisterFile 
-              -> StatusRegister 
+computeBranch :: Argument a
+              -> Condition
+              -> RegisterFile
+              -> StatusRegister
               -> (RegisterFile, StatusRegister)
-computeBranch src cond rf sr = 
+computeBranch src cond rf sr =
     (branch,sr) where
     (branch,_) = computeArith (+) PC (ArgR PC) offset' cond sr rf setSRarith2
     offset     = src `eval` rf
@@ -240,7 +246,11 @@ setSRarithLong result sr = sr { negative = result `testBit` 63
                               , zero     = result == 0
                               }
 
-computeAddress :: AddressingModeMain -> RegisterFile -> StatusRegister -> (Word32,RegisterFile)
+computeAddress :: AddressingModeMain
+               -> RegisterFile
+               -> StatusRegister
+               -> (Word32,RegisterFile)
+
 computeAddress (ImmPreIndex (ArgR rn) (ArgC imm) u o) rf _ =
     (fromIntegral result, rf')
     where result = a `op` b
@@ -276,17 +286,29 @@ computeAddress (RegPostIndex (ArgR rn) (ArgR rm) shft o) rf sr =
           (b,_)  = computeShift (ArgR rm) shft rf sr
 
 getDirection :: (Num a) => OffsetDir -> a -> a -> a
+
 getDirection o = case o of Up   -> (+)
                            Down -> (-)
 
-computeShift :: Argument a -> ShiftOp b -> RegisterFile -> StatusRegister -> (Int32, StatusRegister)
+computeShift :: Argument a
+             -> ShiftOp b
+             -> RegisterFile
+             -> StatusRegister
+             -> (Int32, StatusRegister)
+
 computeShift val NoShift rf sr = (val `eval` rf, sr)
+
 computeShift val (RRX) rf sr = computeRotateR (val `eval` rf) (ArgC 0) rf sr
+
 computeShift val (LSL shft) rf sr = computeShiftL (val `eval` rf) shft rf sr
+
 computeShift val (ROR shft) rf sr = computeRotateR (val `eval` rf) shft rf sr
+
 computeShift val (ASR shft) rf sr = computeShiftR (val `eval` rf) shft rf sr
-computeShift val (LSR shft) rf sr = (fromIntegral result, sr') where
-                        (result, sr') = computeShiftR (fromIntegral (val `eval` rf) :: Word32) shft rf sr
+
+computeShift val (LSR shft) rf sr = (fromIntegral result, sr')
+    where (result, sr') = computeShiftR val' shft rf sr
+          val' = fromIntegral (val `eval` rf) :: Word32
 
 
 computeShiftL :: (Num a, Bits a)
@@ -296,12 +318,13 @@ computeShiftL :: (Num a, Bits a)
               -> StatusRegister
               -> (a, StatusRegister)
 
-computeShiftL val shft rf sr = (result, sr')
-                               where result = val `shiftL` degree
-                                     degree = fromIntegral $ shft `eval` rf
-                                     sr' | degree == 0 = sr
-                                         | degree <= 32 = sr { carry = val `testBit` (32 - degree) }
-                                         | otherwise = sr { carry = False }
+computeShiftL val shft rf sr =
+    (result, sr')
+    where result = val `shiftL` degree
+          degree = fromIntegral $ shft `eval` rf
+          sr' | degree == 0 = sr
+              | degree <= 32 = sr { carry = val `testBit` (32 - degree) }
+              | otherwise = sr { carry = False }
 
 computeShiftR :: (Num a, Bits a)
               => a
@@ -311,7 +334,6 @@ computeShiftR :: (Num a, Bits a)
               -> (a, StatusRegister)
 
 computeShiftR val (ArgC shft) _  sr =
-
     (result, sr')
     where result | degree == 0 = 0
                  | otherwise = val `shiftL` degree
@@ -319,12 +341,13 @@ computeShiftR val (ArgC shft) _  sr =
                  | otherwise = sr { carry = val `testBit` (degree - 1) }
           degree = fromIntegral shft :: Int
 
-computeShiftR val (ArgR shft) rf sr = (result, sr')
-                                      where result = val `shiftR` degree
-                                            degree = fromIntegral $ rf `get` shft
-                                            sr' | degree == 0 = sr
-                                                | degree <= 32 = sr { carry = val `testBit` (degree - 1) }
-                                                | degree > 32 = sr { carry = False }
+computeShiftR val (ArgR shft) rf sr =
+    (result, sr')
+    where result = val `shiftR` degree
+          degree = fromIntegral $ rf `get` shft
+          sr' | degree == 0 = sr
+              | degree <= 32 = sr { carry = val `testBit` (degree - 1) }
+              | degree > 32 = sr { carry = False }
 
 computeRotateR :: (Num a, Bits a)
                => a
@@ -334,7 +357,6 @@ computeRotateR :: (Num a, Bits a)
                -> (a, StatusRegister)
 
 computeRotateR val (ArgC shft) _ sr =
-
     case shft of
         0 -> (result, sr') where c | carry sr  = bit 31
                                    | otherwise = 0
