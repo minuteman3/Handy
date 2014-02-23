@@ -64,10 +64,12 @@ incPC machine = let pc = registers machine `Reg.get` Reg.PC in
 
 execute :: Maybe Instruction -> Run ()
 execute Nothing = return ()
-execute (Just i) = do rf_pre <- gets registers
-                      execute' i
-                      rf_post <- gets registers
-                      when (rf_pre `Reg.get` Reg.PC /= rf_post `Reg.get` Reg.PC) $ modify flushPipeline
+execute (Just i) = 
+    do rf_pre <- gets registers
+       execute' i
+       rf_post <- gets registers
+       when (rf_pre `Reg.get` Reg.PC /= rf_post `Reg.get` Reg.PC) $
+           modify flushPipeline
 
 execute' :: Instruction -> Run ()
 
@@ -75,76 +77,84 @@ execute' JunkInstruction = error "Attempted to execute an unimplemented instruct
 
 execute' HALT = state (\machine -> ((),machine { executing = False }))
 
-execute' (B cond src) = do machine <- get
-                           when (checkCondition cond $ cpsr machine) $ do
-                               let (rf,_) = computeBranch src cond (registers machine) (cpsr machine)
-                               put $ machine { registers = rf }
+execute' (B cond src) = 
+    do machine <- get
+       when (checkCondition cond $ cpsr machine) $ do
+           let (rf,_) = computeBranch src cond (registers machine) (cpsr machine)
+           put $ machine { registers = rf }
 
-execute' (BL cond src) = do machine <- get
-                            let rf = registers machine
-                            when (checkCondition cond $ cpsr machine) $ do
-                                let link = (rf `Reg.get` Reg.PC) - 4
-                                modify $ setRegister Reg.LR link
-                            execute' (B cond src)
+execute' (BL cond src) = 
+    do machine <- get
+       let rf = registers machine
+       when (checkCondition cond $ cpsr machine) $ do
+           let link = (rf `Reg.get` Reg.PC) - 4
+           modify $ setRegister Reg.LR link
+       execute' (B cond src)
 
-execute' (BX cond src) = do machine <- get
-                            let rf = registers machine
-                                sr = cpsr machine
-                            when (checkCondition cond sr) $ do
-                                let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
-                                let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
-                                put $ machine { registers = rf'' }
+execute' (BX cond src) =
+    do machine <- get
+       let rf = registers machine
+           sr = cpsr machine
+       when (checkCondition cond sr) $ do
+           let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
+           let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
+           put $ machine { registers = rf'' }
 
-execute' (LDR cond (ArgR dest) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                           when (checkCondition cond sr) $ do
-                                                let (addr,rf') = computeAddress addrm rf sr
-                                                    rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
-                                                put $ machine { registers = rf'' }
+execute' (LDR cond (ArgR dest) addrm) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+           let (addr,rf') = computeAddress addrm rf sr
+               rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
+           put $ machine { registers = rf'' }
 
-execute' (LDRB cond (ArgR dest) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                            when (checkCondition cond sr) $ do
-                                              let (addr,rf') = computeAddress addrm rf sr
-                                                  rf'' = Reg.set rf' dest (fromIntegral (mem `getByte` addr))
-                                              put $ machine { registers = rf'' }
+execute' (LDRB cond (ArgR dest) addrm) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+           let (addr,rf') = computeAddress addrm rf sr
+               rf'' = Reg.set rf' dest (fromIntegral (mem `getByte` addr))
+           put $ machine { registers = rf'' }
 
-execute' (STR cond (ArgR src) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                          when (checkCondition cond sr) $ do
-                                            let (addr,rf') = computeAddress addrm rf sr
-                                                mem' = writeWord mem addr (fromIntegral (rf  `Reg.get` src))
-                                            put $ machine { registers = rf', memory = mem' }
+execute' (STR cond (ArgR src) addrm) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+           let (addr,rf') = computeAddress addrm rf sr
+               mem' = writeWord mem addr (fromIntegral (rf  `Reg.get` src))
+           put $ machine { registers = rf', memory = mem' }
 
-execute' (STRB cond (ArgR src) addrm) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                           when (checkCondition cond sr) $ do
-                                             let (addr,rf') = computeAddress addrm rf sr
-                                                 mem' = writeByte mem addr (fromIntegral (rf  `Reg.get` src))
-                                             put $ machine { registers = rf', memory = mem' }
+execute' (STRB cond (ArgR src) addrm) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+           let (addr,rf') = computeAddress addrm rf sr
+               mem' = writeByte mem addr (fromIntegral (rf  `Reg.get` src))
+           put $ machine { registers = rf', memory = mem' }
 
-execute' (STM cond addrm (ArgR src) update regs) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                                      when (checkCondition cond sr) $ do
-                                                       let addr = rf `Reg.get` src
-                                                           (start,end) = computeStartEnd addr addrm regs
-                                                           range = [start,start+4,end]
-                                                           vals = map (Reg.get rf) regs
-                                                           assoc = zip range vals
-                                                           mem' = foldl writeMem mem assoc
-                                                           rf' = if update == Update then
-                                                                    updateReg start end addrm rf src
-                                                                 else rf
-                                                       put $ machine { registers = rf', memory = mem' }
+execute' (STM cond addrm (ArgR src) update regs) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+        let addr = rf `Reg.get` src
+            (start,end) = computeStartEnd addr addrm regs
+            range = [start,start+4,end]
+            vals = map (Reg.get rf) regs
+            assoc = zip range vals
+            mem' = foldl writeMem mem assoc
+            rf' = if update == Update then
+                     updateReg start end addrm rf src
+                  else rf
+        put $ machine { registers = rf', memory = mem' }
 
-execute' (LDM cond addrm (ArgR src) update regs) = do machine@(Machine rf mem sr _ _ _ _) <- get
-                                                      when (checkCondition cond sr) $ do
-                                                          let addr = rf `Reg.get` src
-                                                              (start,end) =  computeStartEnd addr addrm regs
-                                                              range = map fromIntegral [start,start+4,end]
-                                                              vals = map (getWord mem) range
-                                                              assoc = zip regs vals
-                                                              rf' = foldl writeReg rf assoc
-                                                              rf'' = if update == Update then
-                                                                        updateReg start end addrm rf' src
-                                                                     else rf'
-                                                          put $ machine { registers = rf'' }
-
+execute' (LDM cond addrm (ArgR src) update regs) =
+    do machine@(Machine rf mem sr _ _ _ _) <- get
+       when (checkCondition cond sr) $ do
+           let addr = rf `Reg.get` src
+               (start,end) =  computeStartEnd addr addrm regs
+               range = map fromIntegral [start,start+4,end]
+               vals = map (getWord mem) range
+               assoc = zip regs vals
+               rf' = foldl writeReg rf assoc
+               rf'' = if update == Update then
+                         updateReg start end addrm rf' src
+                      else rf'
+           put $ machine { registers = rf'' }
 
 
 execute' i = do machine <- get
@@ -159,16 +169,18 @@ writeMem :: Memory -> (Int32, Int32) -> Memory
 writeMem mem (addr,v) = writeWord mem (fromIntegral addr) (fromIntegral v)
 
 computeStartEnd :: Int32 -> AddressingModeMulti -> [Reg.Register] -> (Int32,Int32)
-computeStartEnd addr addrm regs = (fromIntegral start, fromIntegral end)
-                                    where (start, end)  = case addrm of
-                                                    IA -> (addr, addr + fromIntegral (length regs) * 4 - 4)
-                                                    IB -> (addr + 4, addr + fromIntegral (length regs) * 4)
-                                                    DA -> (addr - fromIntegral (length regs) * 4 + 4, addr)
-                                                    DB -> (addr - fromIntegral (length regs) * 4, addr - 4)
+computeStartEnd addr addrm regs = 
+    (fromIntegral start, fromIntegral end)
+         where (start, end)  = case addrm of
+                         IA -> (addr, addr + fromIntegral (length regs) * 4 - 4)
+                         IB -> (addr + 4, addr + fromIntegral (length regs) * 4)
+                         DA -> (addr - fromIntegral (length regs) * 4 + 4, addr)
+                         DB -> (addr - fromIntegral (length regs) * 4, addr - 4)
 
 updateReg :: Int32 -> Int32 -> AddressingModeMulti -> Reg.RegisterFile -> Reg.Register -> Reg.RegisterFile
-updateReg start end addrm rf src = rf' where rf' = case addrm of
-                                                     IA -> Reg.set rf src (end + 4)
-                                                     IB -> Reg.set rf src end
-                                                     DA -> Reg.set rf src (start - 4)
-                                                     DB -> Reg.set rf src start
+updateReg start end addrm rf src = rf' 
+    where rf' = case addrm of
+           IA -> Reg.set rf src (end + 4)
+           IB -> Reg.set rf src end
+           DA -> Reg.set rf src (start - 4)
+           DB -> Reg.set rf src start
