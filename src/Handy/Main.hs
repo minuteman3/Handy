@@ -89,6 +89,7 @@ newMachine mem = Machine { registers = blankRegisterFile
                          , fetchR    = Nothing
                          , decodeR   = Nothing
                          , executeR  = Nothing
+                         , stall     = 0
                          }
 
 runCPU :: Program -> IO Machine

@@ -12,6 +12,7 @@ import qualified Handy.Registers as Reg
 
 import Control.Monad.State
 import Data.Int (Int32)
+import Data.Word (Word8)
 import Data.Bits ((.&.))
 import qualified Data.ByteString.Lazy as B
 
@@ -27,6 +28,7 @@ data Machine = Machine { registers :: Reg.RegisterFile
                        , fetchR    :: FetchRegister
                        , decodeR   :: DecodeRegister
                        , executeR  :: ExecuteRegister
+                       , stall     :: Word8
                        } deriving Show
 
 type Run a = StateT Machine IO a
@@ -34,9 +36,13 @@ run :: Run ()
 run = do
     running <- gets executing
     when running $ do
-        modify pipeline
-        execute =<< gets executeR
-        modify incPC
+        stalled <- isStalled
+        if stalled then
+            state (\machine -> ((), machine { stall = (stall machine) - 1 }))
+        else do
+            modify pipeline
+            execute =<< gets executeR
+            modify incPC
         run
 
 pipeline :: Machine -> Machine
@@ -62,9 +68,13 @@ incPC :: Machine -> Machine
 incPC machine = let pc = registers machine `Reg.get` Reg.PC in
                   setRegister Reg.PC ((pc .&. 0xFFFFFFFC) + 4) machine
 
+isStalled :: Run Bool
+isStalled = do s <- gets stall
+               return $ s > 0
+
 execute :: Maybe Instruction -> Run ()
 execute Nothing = return ()
-execute (Just i) = 
+execute (Just i) =
     do rf_pre <- gets registers
        execute' i
        rf_post <- gets registers
@@ -77,13 +87,13 @@ execute' JunkInstruction = error "Attempted to execute an unimplemented instruct
 
 execute' HALT = state (\machine -> ((),machine { executing = False }))
 
-execute' (B cond src) = 
+execute' (B cond src) =
     do machine <- get
        when (checkCondition cond $ cpsr machine) $ do
            let (rf,_) = computeBranch src cond (registers machine) (cpsr machine)
            put $ machine { registers = rf }
 
-execute' (BL cond src) = 
+execute' (BL cond src) =
     do machine <- get
        let rf = registers machine
        when (checkCondition cond $ cpsr machine) $ do
@@ -98,38 +108,39 @@ execute' (BX cond src) =
        when (checkCondition cond sr) $ do
            let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
            let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
-           put $ machine { registers = rf'' }
+           put $ machine { registers = rf'', stall = 10 }
 
 execute' (LDR cond (ArgR dest) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
-           put $ machine { registers = rf'' }
+           put $ machine { registers = rf'', stall = 10 }
+
 
 execute' (LDRB cond (ArgR dest) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                rf'' = Reg.set rf' dest (fromIntegral (mem `getByte` addr))
-           put $ machine { registers = rf'' }
+           put $ machine { registers = rf'', stall = 10 }
 
 execute' (STR cond (ArgR src) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                mem' = writeWord mem addr (fromIntegral (rf  `Reg.get` src))
-           put $ machine { registers = rf', memory = mem' }
+           put $ machine { registers = rf', memory = mem', stall = 10 }
 
 execute' (STRB cond (ArgR src) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                mem' = writeByte mem addr (fromIntegral (rf  `Reg.get` src))
-           put $ machine { registers = rf', memory = mem' }
+           put $ machine { registers = rf', memory = mem', stall = 10 }
 
 execute' (STM cond addrm (ArgR src) update regs) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
         let addr = rf `Reg.get` src
             (start,end) = computeStartEnd addr addrm regs
@@ -140,10 +151,10 @@ execute' (STM cond addrm (ArgR src) update regs) =
             rf' = if update == Update then
                      updateReg start end addrm rf src
                   else rf
-        put $ machine { registers = rf', memory = mem' }
+        put $ machine { registers = rf', memory = mem', stall = 10 }
 
 execute' (LDM cond addrm (ArgR src) update regs) =
-    do machine@(Machine rf mem sr _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let addr = rf `Reg.get` src
                (start,end) =  computeStartEnd addr addrm regs
@@ -154,7 +165,7 @@ execute' (LDM cond addrm (ArgR src) update regs) =
                rf'' = if update == Update then
                          updateReg start end addrm rf' src
                       else rf'
-           put $ machine { registers = rf'' }
+           put $ machine { registers = rf'', stall = 10 }
 
 
 execute' i = do machine <- get
@@ -169,7 +180,7 @@ writeMem :: Memory -> (Int32, Int32) -> Memory
 writeMem mem (addr,v) = writeWord mem (fromIntegral addr) (fromIntegral v)
 
 computeStartEnd :: Int32 -> AddressingModeMulti -> [Reg.Register] -> (Int32,Int32)
-computeStartEnd addr addrm regs = 
+computeStartEnd addr addrm regs =
     (fromIntegral start, fromIntegral end)
          where (start, end)  = case addrm of
                          IA -> (addr, addr + fromIntegral (length regs) * 4 - 4)
@@ -178,7 +189,7 @@ computeStartEnd addr addrm regs =
                          DB -> (addr - fromIntegral (length regs) * 4, addr - 4)
 
 updateReg :: Int32 -> Int32 -> AddressingModeMulti -> Reg.RegisterFile -> Reg.Register -> Reg.RegisterFile
-updateReg start end addrm rf src = rf' 
+updateReg start end addrm rf src = rf'
     where rf' = case addrm of
            IA -> Reg.set rf src (end + 4)
            IB -> Reg.set rf src end
