@@ -1,0 +1,25 @@
+\select@language {american}
+\vspace {-\cftbeforepartskip }
+\select@language {american}
+\contentsline {part}{i\hspace {1em}\spacedlowsmallcaps {Some Kind of Manual}}{1}{part.1}
+\contentsline {chapter}{\numberline {1}\spacedlowsmallcaps {Introduction}}{3}{chapter.1}
+\contentsline {part}{ii\hspace {1em}\spacedlowsmallcaps {The Showcase}}{5}{part.2}
+\contentsline {chapter}{\numberline {2}\spacedlowsmallcaps {Implementation}}{7}{chapter.2}
+\contentsline {section}{\numberline {2.1}Register File}{7}{section.2.1}
+\contentsline {section}{\numberline {2.2}TEST}{7}{section.2.2}
+\contentsline {subsection}{\numberline {2.2.1}Test for a Subsection}{7}{subsection.2.2.1}
+\contentsline {subsection}{\numberline {2.2.2}Autem Timeam}{8}{subsection.2.2.2}
+\contentsline {section}{\numberline {2.3}Another Section in This Chapter}{8}{section.2.3}
+\contentsline {subsection}{\numberline {2.3.1}Personas Initialmente}{9}{subsection.2.3.1}
+\contentsline {subsubsection}{\numberline {2.3.1.1}A Subsubsection}{9}{subsubsection.2.3.1.1}
+\contentsline {paragraph}{A Paragraph Example}{10}{subsubsection.2.3.1.1}
+\contentsline {subsection}{\numberline {2.3.2}Figure Citations}{10}{subsection.2.3.2}
+\contentsline {chapter}{\numberline {3}\spacedlowsmallcaps {Math Test Chapter}}{13}{chapter.3}
+\contentsline {section}{\numberline {3.1}Some Formulas}{13}{section.3.1}
+\contentsline {section}{\numberline {3.2}Various Mathematical Examples}{14}{section.3.2}
+\contentsline {part}{iii\hspace {1em}\spacedlowsmallcaps {Appendix}}{15}{part.3}
+\contentsline {chapter}{\numberline {A}\spacedlowsmallcaps {Appendix Test}}{17}{appendix.A}
+\contentsline {section}{\numberline {A.1}Appendix Section Test}{17}{section.A.1}
+\contentsline {section}{\numberline {A.2}Another Appendix Section Test}{18}{section.A.2}
+\vspace {\beforebibskip }
+\contentsline {chapter}{\spacedlowsmallcaps {Bibliography}}{19}{dummy.7}

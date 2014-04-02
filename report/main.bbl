@@ -1,0 +1,34 @@
+\begin{thebibliography}{5}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bentley(1999)]{bentley:1999}
+Jon Bentley.
+\newblock \emph{{P}rogramming {P}earls}.
+\newblock Addison--Wesley, Boston, MA, USA, 2nd edition, 1999.
+
+\bibitem[Cormen et~al.(2001)Cormen, Leiserson, Rivest, and Stein]{cormen:2001}
+Thomas~H. Cormen, Charles~E. Leiserson, Ronald~L. Rivest, and Clifford Stein.
+\newblock \emph{{I}ntroduction to {A}lgorithms}.
+\newblock The MIT Press, Cambridge, MA, USA, 2nd edition, 2001.
+
+\bibitem[Knuth(1974)]{knuth:1974}
+Donald~E. Knuth.
+\newblock {C}omputer {P}rogramming as an {A}rt.
+\newblock \emph{Communications of the ACM}, 17\penalty0 (12):\penalty0
+  667--673, December 1974.
+
+\bibitem[Knuth(1976)]{knuth:1976}
+Donald~E. Knuth.
+\newblock {B}ig {O}micron and {B}ig {O}mega and {B}ig {T}heta.
+\newblock \emph{SIGACT News}, 8\penalty0 (2):\penalty0 18--24, April/June 1976.
+
+\bibitem[Sommerville(1992)]{sommerville:1992}
+Ian Sommerville.
+\newblock \emph{{S}oftware {E}ngineering}.
+\newblock Addison-Wesley, Boston, MA, USA, 4th edition, 1992.
+
+\end{thebibliography}
