@@ -6,27 +6,38 @@ import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Encoder
 import Control.Monad.State
+import Prelude hiding(GT,LE,EQ)
 
 type Program = [Instruction]
 
 toMemory :: [Instruction] -> Memory
 toMemory is = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..] $ map serialiseInstruction is
 
-{-testProg :: Program-}
-{-testProg = [ADD AL NoS R0 (ArgR R0) (ArgC 1024) NoShift-}
-           {-,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift-}
-           {-,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift-}
-           {-,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift-}
-           {-,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift-}
-           {-,ADD AL NoS R0 (ArgR R0) (ArgC 1) NoShift-}
-           {-,MOV AL NoS R1 (ArgC 1024) NoShift-}
-           {-,MVN AL NoS R2 (ArgC 1) NoShift-}
-           {-,HALT]-}
+demoProg :: Program
+demoProg = [MOV AL NoS R0 (ArgC 32) NoShift,
+            MOV AL NoS R1 (ArgC 14) NoShift,
+            CMP AL (ArgR R0) (ArgR R1) NoShift,
+            SUB GT NoS R0 (ArgR R0) (ArgR R1) NoShift,
+            SUB LE NoS R1 (ArgR R1) (ArgR R0) NoShift,
+            B   NE (ArgC $ negate 6),
+            HALT]
 
-{-testProg1 :: Program-}
-{-testProg1 = [CMP AL (ArgR R0) (ArgC 1) NoShift,HALT]-}
 
 testProg :: Program
+newMachine :: Memory -> Machine
+newMachine mem = Machine { registers = blankRegisterFile
+                         , memory    = mem
+                         , cpsr      = blankStatusRegister
+                         , executing = True
+                         , fetchR    = Nothing
+                         , decodeR   = Nothing
+                         , executeR  = Nothing
+                         , stall     = 0
+                         }
+
+runCPU :: Program -> IO Machine
+runCPU prog = execStateT run (newMachine $ toMemory prog)
+
 testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
             MOV AL NoS R1 (ArgC 20) NoShift,
             MOV AL NoS R1 (ArgR R1) (LSL (ArgC 1)),
@@ -34,10 +45,6 @@ testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
             MUL AL NoS R2 (ArgR R2) (ArgR R1),
             HALT]
 -- Expect final state: R0 = 10, R1 = 40, R2 = 2000, R15 = 4, all other registers = 0, CPSR = ffff
-
-{-testProg1 = [MOV AL NoS R0 (ArgC 10) NoShift,-}
-             {-SUB AL NoS R0 (ArgR R0) (ArgC 11) NoShift,-}
-             {-HALT]-}
 
 testProg2 :: Program
 testProg2 = [MOV AL NoS R0 (ArgC 8) NoShift,
@@ -81,16 +88,3 @@ testProg7 = [MOV AL NoS R0 (ArgC 1) NoShift
             ,SMULL AL NoS R2 R3 (ArgR R0) (ArgR R1)
             ,HALT]
 
-newMachine :: Memory -> Machine
-newMachine mem = Machine { registers = blankRegisterFile
-                         , memory    = mem
-                         , cpsr      = blankStatusRegister
-                         , executing = True
-                         , fetchR    = Nothing
-                         , decodeR   = Nothing
-                         , executeR  = Nothing
-                         , stall     = 0
-                         }
-
-runCPU :: Program -> IO Machine
-runCPU prog = execStateT run (newMachine $ toMemory prog)
