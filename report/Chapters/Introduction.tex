@@ -1,0 +1,41 @@
+% Chapter X
+
+\chapter{Introduction} % Chapter title
+
+\label{ch:introduction} % For referencing the chapter elsewhere, use \autoref{ch:name} 
+
+%----------------------------------------------------------------------------------------
+
+This report details the design and implementation of \emph{Handy}, a Haskell-based simulator of the ARM4T Instruction Set Architecture as seen in the ARM7TDMI microprocessor. \emph{Handy} implements a great majority of the instructions present in the ARM4T ISA in a clean functional style. \emph{Handy} consists of a small virtual machine, complete with registers and a true Von Neumann memory architecture, including an instruction encoder and decoder capable of assembling or disassembling ARM machine code.
+
+While first and foremost a simulator that implements the operational semantics of the ARM4T Instruction Set Architecture, \emph{Handy} also implements several features inspired by the physical ARM7TDMI microprocessor. These are:
+
+\begin{itemize}
+    \item Instruction pipelining into three stages:
+      \begin{itemize}
+        \item Fetch, where an instruction is retrieved from memory.
+        \item Decode, where a previously fetched instruction is prepared for execution.
+        \item Execute, where an instruction is executed and processor state updated based on its result.
+      \end{itemize}
+    \item Stalling of execution, where some instructions require the processor to halt for a number of cycles while they complete.
+\end{itemize}
+
+The inclusion of these features allows for a richer and more accurate simulation, allowing \emph{Handy} to emulate an ARM7TDMI for simple purposes. \emph{Handy} permits a programmer to execute simple ARM assembly programs that do not require use of interrupts or physical hardware in a light weight environment, removing the need for a physical development board or full-featured emulator, both typically costly endeavours both in terms of money and effort.
+
+%------------------------------------------------
+
+\subsection{Motivation}
+
+The original motivation for development of \emph{Handy} is to serve as a platform for use in teaching Compiler Design to students in Trinity College Dublin. Students of Trinity College Dublin study the ARM4T Instruction Set through use of the ARM7TDMI processor in their first and second years of university. In their third year they undertake a mandatory class in Compiler Design in which they implement a simple programming language on a virtual machine which executes its own bytecode and utilises an assembly language contrived specifically for that purpose. While this solution is adequate, the potential to use the ARM assembly language as a target language is very appealing, as it leverages two years worth of study already undertaken by students.
+
+The main constraint to using the ARM assembly language is a lack of a platform to execute it. While Trinity College has a significant number of ARM7TDMI development boards they are in high demand, and requiring their use by students studying Compiler Design might be considered excessive. ARM provide their own development environment $\mu$Vision which includes a full emulator, but this is a very substantial program that students must apply for an educational license to download and use. Additionally both these options face the significant problem of being very challenging to integrate seamlessly into a work flow where they are not the primary focus.
+
+The solution, given the unsuitability of the two major options already available, was to forge a new path. By implementing a virtual machine that executes only the ARM assembly language without simulating the full range of physical components as a single purpose binary it could easily be included in a tool chain provided to students.
+
+%------------------------------------------------
+
+\subsection{Literature Review}
+
+The use of Haskell to implement an ARM4T simulator is not without precedent. A package in the Haskell ``Hackage'' repository entitled HARM written for use in a University of Connecticut Computer Science class, ``CSE240 Intermediate Computer Systems'' in 2001 seeks to accomplish a similar goal. The possible use or extension of this project was investaged but it was found not to be desirable. The style of its implementation is unidiomatic to the point that many of the benefits of using Haskell for this purpose are lost. It was quickly dismissed.
+
+Excluding HARM we were unable to find any other extant projects in this vein, and so turned to implementation from scratch. The primary source of information throughout this endeavour was the ARM Architecture Reference Manual\citep{armarm:2005}. When this proved too dense or required further explanation, we made reference to ARM Assembly Language: Fundamental and Techniques\citep{hohl:2009} and ARM System-on-Chip Architecture\citep{furber2000arm}. Between these three texts more than enough information for a full implementation could be found, and in particular the ARM Architecture Reference Manual\citep{armarm:2005} will be referenced many times throughout this report.

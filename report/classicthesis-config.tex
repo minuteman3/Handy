@@ -13,23 +13,23 @@
 %----------------------------------------------------------------------------------------
 
 % Remove drafting to get rid of the '[ Date - classicthesis version 4.0 ]' text at the bottom of every page
-\PassOptionsToPackage{eulerchapternumbers,listings,drafting, pdfspacing, subfig,beramono,eulermath,parts}{classicthesis}
+\PassOptionsToPackage{eulerchapternumbers,listings,pdfspacing,subfig,beramono,eulermath,parts}{classicthesis}
 % Available options: drafting parts nochapters linedheaders eulerchapternumbers beramono eulermath pdfspacing minionprospacing tocaligned dottedtoc manychapters listings floatperchapter subfig
 % Adding 'dottedtoc' will make page numbers in the table of contents flushed right with dots leading to them
 
-\newcommand{\myTitle}{A Classic Thesis Style\xspace}
-\newcommand{\mySubtitle}{An Homage to The Elements of Typographic Style\xspace}
-\newcommand{\myDegree}{Doktor-Ingenieur (Dr.-Ing.)\xspace}
-\newcommand{\myName}{Andr\'e Miede\xspace}
-\newcommand{\myProf}{Put name here\xspace}
+\newcommand{\myTitle}{Handy\xspace}
+\newcommand{\mySubtitle}{A Haskell-based Virtual Machine for the Execution of ARM Assembly Code\xspace}
+\newcommand{\myDegree}{BA (Mod) in Computer Science\xspace}
+\newcommand{\myName}{Miles McGuire\xspace}
+\newcommand{\myProf}{Dr. David Abrahamson\xspace}
 \newcommand{\myOtherProf}{Put name here\xspace}
 \newcommand{\mySupervisor}{Put name here\xspace}
 \newcommand{\myFaculty}{Put data here\xspace}
 \newcommand{\myDepartment}{Put data here\xspace}
-\newcommand{\myUni}{Put data here\xspace}
-\newcommand{\myLocation}{Darmstadt\xspace}
-\newcommand{\myTime}{December 2011\xspace}
-\newcommand{\myVersion}{version 4.0\xspace}
+\newcommand{\myUni}{Trinity College Dublin\xspace}
+\newcommand{\myLocation}{Dublin\xspace}
+\newcommand{\myTime}{April 2014\xspace}
+\newcommand{\myVersion}{version 1.0\xspace}
 
 %----------------------------------------------------------------------------------------
 %	USEFUL COMMANDS
@@ -103,11 +103,17 @@
 \PassOptionsToPackage{pdftex}{graphicx}
 \usepackage{graphicx} 
 
+%------------------------------------------------
+
+\usepackage{multirow}
+
 %----------------------------------------------------------------------------------------
 %	FLOATS: TABLES, FIGURES AND CAPTIONS SETUP
 %----------------------------------------------------------------------------------------
 
 \usepackage{tabularx} % Better tables
+\usepackage{longtable}
+\usepackage{ltablex}
 \setlength{\extrarowheight}{3pt} % Increase table row height
 \newcommand{\tableheadline}[1]{\multicolumn{1}{c}{\spacedlowsmallcaps{#1}}}
 \newcommand{\myfloatalign}{\centering} % To be used with each float for alignment
@@ -173,7 +179,7 @@ pdfproducer={LaTeX with hyperref and classicthesis}
 
 \usepackage{ifthen} % Allows the user of the \ifthenelse command
 \newboolean{enable-backrefs} % Variable to enable backrefs in the bibliography
-\setboolean{enable-backrefs}{false} % Variable value: true or false
+\setboolean{enable-backrefs}{true} % Variable value: true or false
 
 \newcommand{\backrefnotcitedstring}{\relax} % (Not cited.)
 \newcommand{\backrefcitedsinglestring}[1]{(Cited on page~#1.)}

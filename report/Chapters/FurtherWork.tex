@@ -1,0 +1,59 @@
+% Chapter X
+
+\chapter{Further Work} % Chapter title
+
+\label{ch:furtherwork} % For referencing the chapter elsewhere, use \autoref{ch:name} 
+
+As we have seen, a significant amount of work has already been done to make \emph{Handy} a viable simulator for use in a classroom context. There remain do however remain a number of areas in which \emph{Handy} could be improved.
+
+%----------------------------------------------------------------------------------------
+
+\section{Remodel Instructions}
+
+The Instruction data type seemed outwardly simple to model, requiring almost no transformation whatsoever from the implementation described in the ARM Architecture Reference Manual.  Unfortunately this lead to over eager implementation before certain subtleties came to light. The design currently implemented as described in \autoref{ch:implementation} is serviceable but sub-optimal. A more rigorous solution would move away from GADTs as a basis for the design and use Haskell's type classes more extensively instead. This would yield a more easily testable code base and simplify implementation throughout, possibly eliding the need for an ``Argument'' type entirely in favour of an Argument type class.
+
+%------------------------------------------------
+
+\section{Processor Modes}
+
+All programs running in \emph{Handy} run in effectively System mode, and the processor cannot be shifted to another mode. While it would be a somewhat substantial undertaking it would be very desirable to extend the simulator to accommodate switching between the various ARM architecture defined processor modes. With this in place, system functions such as instruction set extension and interrupts could be realised correctly. This omission is the single biggest deviance from the ARM4T Instruction Set Architecture in \emph{Handy}. To address this the Register, CPU and Status Register components would need to be expanded as ARM processors provide separate register banks and status registers for each mode of execution. This is further complicated by some registers being shared between register banks.
+
+One possible solution to this problem would be to expand the RegisterFile type to contain enough fields for every register in every mode, and reimplement the $get$ and $set$ functions to also take the current processor mode as a parameter in addition to the register symbol currently provided. This would allow the $get$ and $set$ functions to select the appropriate register based on the processor mode whilst having a relatively small footprint in terms of code needing to be rewritten.
+
+The StatusRegister type would need to be expanded to include the processor mode. Certain modes have an entirely separate status register but restore the old status register when returning to the previous mode. This feature would also need to be accounted for, as this is used to implement exception handlers and similar. A possible solution is to expand the definition of the StatusRegister type to encompass the status registers of all possible modes and provide functions that retrieve information from the appropriate fields based on the mode in the same fashion as suggested for the register file above.
+
+With these changes in place \emph{Handy}'s simulation of the ARM4T architecture would be complete. Processor modes alone would be of little practical application but are a necessity if other extensions were to be made, for example interrupts would require both IRQ (interrupt) and FIQ (fast interrupt) modes to be implemented correctly.
+
+%------------------------------------------------
+
+\section{Improved Memory}
+
+Currently the memory system used by \emph{Handy} is incredibly simple. With some additional work this could be greatly improved. Rather than providing a map directly from 32-bit addresses to 8-bit values the memory implementation could be modified to utilise a page based system. The upper 20 bits of an address could be used as an address to select a 4096 byte array from a map of memory pages. This array-based page would offer $O(1)$ performance for reads and writes. This could be further expanded on using Haskell's Data.LRU to implement a cache or caches in front of memory to provide a simulation of a more complete memory hierarchy with better performance characteristics. The current model also provides no concept of write protection for memory regions, with all locations being writable. This could be accommodated in a revised system, allowing for Read Only pages and privileged vs unprivileged access to memory regions.
+
+In addition to improved performance, this would allow \emph{Handy} to model much more complex systems as well as potentially serving as a tool for teaching students about caching and the memory hierarchy, if sufficient instrumentation could be provided to illustrate activity.
+
+%------------------------------------------------
+
+\section{Interrupts}
+
+\emph{Handy} has no concept of interrupts whatsoever. This is not a great failing for most classroom purposes and a great deal can be done with \emph{Handy} in its current state, but for a full-featured simulation it is an important oversight. The system would need rigorous design before any implementation could take place --- incorrect implementation would be worse than no implementation as any knowledge the user has of a real ARM processor would now misinform their decisions with \emph{Handy} --- but inclusion of interrupts would be a very significant step towards full hardware simulation and would allow \emph{Handy} to simulate very complex programs, for example pre-emptive multitasking. We have no recommendations at this time as to how a fully implemented Interrupts system for \emph{Handy} might look. Presumably it would require multi-threading to handle the asynchronous nature of interrupts, though at this time that is purely conjecture.
+
+%------------------------------------------------
+
+\section{Thumb Mode}
+
+Thumb Mode is a special processor mode provided by some ARM processors\footnote{the ``T'' in ARM7TDMI denotes support of Thumb Mode} which utilises a re-encoded subset of the ARM instruction set in 16-bits. It is perfectly reasonable never to implement Thumb mode in \emph{Handy}, but it would be required if one had designs to some day make \emph{Handy} a full fledged ARM7TDMI emulator. Thumb mode does not in fact alter the underlying programmers' model of the ARM architecture\citep[pp. A6-2]{armarm:2005} so implementation should not be particularly arduous, the most complicated component being an implementation of a Thumb instruction decoder which could be based on the present 32-bit instruction decoder.
+
+%------------------------------------------------
+
+\section{General Purpose I/O}
+
+Another ``nice to have'' feature that could potentially be implemented is simulation of physical outputs such as GPIO pins either using operating system signals or an in-Haskell implementation. This seems outwardly to be a relatively simple task to implement but was entirely out of scope for the purposes of this project. With such an addition \emph{Handy} could be used to simulate an even greater spectrum of ARM programs.
+
+%------------------------------------------------
+
+\section{Debugger}
+
+A potentially very useful feature would be a full debugging system either within or around \emph{Handy} that allowed for pausing of execution, introspection of registers and memory in a running simulation, breakpoints and so on. This would greatly improve the quality of life for students and other programmers using \emph{Handy} as a platform for testing or developing programs. Unfortunately it is potentially a very significant undertaking, requiring instrumentation or modification of practically every component of the system.
+
+%----------------------------------------------------------------------------------------

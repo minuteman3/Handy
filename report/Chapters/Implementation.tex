@@ -1,0 +1,367 @@
+% Chapter X
+
+\chapter{Implementation} % Chapter title
+
+\label{ch:implementation} % For referencing the chapter elsewhere, use \autoref{ch:name} 
+
+%----------------------------------------------------------------------------------------
+
+\section{The Instruction Data Type}
+\label{sec:instruction}
+
+The Instruction data type is integral to the operation of \emph{Handy}. All components of the system, other than the memory, require touching upon it to a greater or lesser extent. It is represented as a Generalised Algebraic Data Type (GADT), allowing for fine grained control of the types that an instruction can be constructed by. An abbreviated example of the source code listing for the Instruction data type is seen in \autoref{lst:instType}.
+
+\begin{lstlisting}[numbers=none,float,caption={The Instruction data type},label={lst:instType}]
+data Instruction where
+    ADD   :: Condition -> S -> Destination -> Argument Register -> Argument a -> ShiftOp b -> Instruction
+    MUL   :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Instruction
+    B     :: Condition -> Argument Constant   -> Instruction
+    STM   :: Condition -> AddressingModeMulti -> Argument Register -> UpdateReg -> [Register] -> Instruction
+\end{lstlisting}
+
+Each parameter of the GADT shown in \autoref{lst:instType} maps directly to a component of an assembly instruction defined in the ARM Architecture Reference Manual. The order that parameters appear in the Instruction data constructors corresponds to the order these fields appear in the actual ARM assembly language, though some fields are optional in the ARM assembly language but all fields are compulsory in this representation. The result of this modeling is such that \emph{Handy}'s internal representation of an ARM instruction appears very similar to that of the instruction it represents, as shown in \autoref{fig:instructionComparison}.
+
+\begin{figure}
+\caption{Comparison of ARM instructions and their internal representations}
+\label{fig:instructionComparison}
+\begin{lstlisting}[numbers=none]
+  SUBGT R0, R0, R1
+  SUB GT NoS R0 (ArgR R0) (ArgR R1) NoShift
+\end{lstlisting}
+\begin{lstlisting}[numbers=none]
+  MOVS R1, R2 LSL #1
+  MOV AL S R1 (ArgR R2) (LSL (ArgC 1))
+\end{lstlisting}
+\begin{lstlisting}[numbers=none]
+  LDMEA R0!, {R1, R2, R3}
+  LDM AL EA (ArgR R0) Update [R1, R2, R3]
+\end{lstlisting}
+\end{figure}
+
+The implementation of individual components of the Instruction data type will be discussed in subsections. The only exceptions are the ``Destination'' and ``Constant'' types, which are type synonyms of the ``Register'' and ``Int32'' types respectively and are used only to clarify the language in type signatures throughout the code base.
+
+It is important to understand that the Instruction data type itself has no operations defined upon it and is simply a data model used as a means of driving execution of the other components.
+
+\subsection{The Argument Type}
+
+The Argument type is a wrapper around the ``Constant'' and ``Register'' types allowing for interchangeable use of the two in positions which demand it - namely the third operand of a number of arithmetic and logic instructions. It is defined as shown in \autoref{lst:argType}
+
+\begin{lstlisting}[numbers=none,float,caption={The Argument data type},label={lst:argType}]
+data Argument a where
+    ArgC :: Constant -> Argument Constant
+    ArgR :: Register -> Argument Register
+\end{lstlisting}
+
+``Argument'' is also the only type composing the Instruction type with an operation. The $eval$ function takes an argument and a register file and evaluates it in the context of that register file.\footnote{The register file type is explored in more detail in \ref{subsec:rf}} Its implementation is shown in \autoref{lst:evalFunc}.
+
+\begin{lstlisting}[numbers=none,float,caption={The $eval$ function for the Argument type},label={lst:evalFunc}]
+eval :: Argument a -> RegisterFile -> Int32
+eval (ArgC v) _  = v
+eval (ArgR r) rf = rf `get` r
+\end{lstlisting}
+
+\subsection{The Condition Type}
+\label{subsec:implementation:condition}
+
+The Condition type is a nullary data type of eighteen constructors corresponding to the eighteen conditional execution modes of ARM assembly instructions\citep{hohl:2009}. These constructors serve as symbols which are used to specify which flags to test against when executing an instruction, and have no operations defined directly upon them. A brief example of their implementation is shown in \autoref{lst:condType}
+
+\begin{lstlisting}[numbers=none,float,caption={The Condition data type)},label={lst:condType}]
+data Condition = EQ
+               | NE
+               | CS
+               | CC
+               | AL
+               | NV
+\end{lstlisting}
+
+\subsection{The ShiftOp Type}
+\label{subsec:shiftop}
+
+The ShiftOp type represents one of the six data processing operations\citep{hohl:2009}\citep{armarm:2005} available to certain instructions in the ARM assembly language, for example a logical shift left applied to the third operand of an instruction before the instruction itself is executed.\footnote{An example of such can be seen in \autoref{fig:instructionComparison}, the ``LSL'' term in the second example.}
+
+The internal representation of these operations is a data type with four unary and two nullary type constructors and can be seen in \autoref{lst:shiftType}. These data constructors are used as tokens by the ALU (\autoref{sec:alu}) to decide which operation to apply to the third operand of any instruction in which such ``ShiftOp'' term is valid as defined by the ``Instruction'' data type. Such an operation is applied in all cases, resulting in the need for a ``NoShift'' data constructor which simply selects the identity function and performs no transformation.
+
+\begin{lstlisting}[numbers=none,float,caption={The ShiftOp data type},label={lst:shiftType}]
+data ShiftOp a = LSL (Argument a)
+               | LSR (Argument a)
+               | ASR (Argument a)
+               | ROR (Argument a)
+               | RRX
+               | NoShift
+\end{lstlisting}
+
+\subsection{Addresing Mode Types}
+
+To support the full range of addressing modes used in memory load and store operations \emph{Handy} utilises two types AddressingModeMain and AddressingModeMulti.
+
+AddressingModeMain consists of four data constructors that implement the nine possible\citep{armarm:2005} addressing modes for loading or storing a single byte or word value. The definition for AddressingModeMain may be seen in \autoref{lst:addrMainType}.
+
+\begin{lstlisting}[numbers=none,float,caption={The AddressingModeMain data type},label={lst:addrMainType}]
+data AddressingModeMain = ImmPreIndex (Argument Register) (Argument Constant) UpdateReg OffsetDir
+                        | RegPreIndex (Argument Register) (Argument Register) (ShiftOp Constant) UpdateReg OffsetDir
+                        | ImmPostIndex (Argument Register) (Argument Constant) OffsetDir
+                        | RegPostIndex (Argument Register) (Argument Register) (ShiftOp Constant) OffsetDir
+\end{lstlisting}
+
+The UpdateReg and OffsetDir types seen in \autoref{lst:addrMainType} are binary flags used to specify whether the result of evaluating an instruction in a given addressing mode should update the register holding the base address, and in whether the offset specified by the addressing mode should be added to or subtracted from the base register. Use of these flags allow these four data constructors to represent all nine addressing modes specified by the ISA.
+
+AddressingModeMulti represents the alternative set of addressing modes utilised by the LDM and STM (load/store multiple) instructions\citep{armarm:2005}. Unlike AddressingModeMain these modes do not require any arguments and are represented by eight nullary data constructors that serve as flags to inform the CPU how the base address register is to be incremented when between stores.
+
+\section{Central Processing Unit}
+\label{sec:cpu}
+
+The CPU is implemented in what can be considered a number of parts. First and most significantly is a record type ``Machine'' which encapsulates all of the stateful components of the CPU: the registers, memory, status register, instruction pipeline and some flags used in the process of execution. The implementation of the Machine type is shown in \autoref{lst:machineType}.
+
+\begin{lstlisting}[numbers=none,float,caption={The AddressingModeMulti data type},label={lst:machineType}]
+data Machine = Machine { registers :: RegisterFile
+                       , memory    :: Memory
+                       , cpsr      :: StatusRegister
+                       , fetchR    :: FetchRegister
+                       , decodeR   :: DecodeRegister
+                       , executeR  :: ExecuteRegister
+                       , stall     :: Word8
+                       , executing :: Bool
+                       }
+\end{lstlisting}
+
+Memory shall be discussed in greater detail in a later section while the Register File and Status Registers are discussed in subsections \ref{subsec:rf} and \ref{subsec:cpsr} of this section.
+
+The Machine data type represents the state of a machine at one discrete interval of time and is immutable. Clearly this is insufficient to model a running processor, and must only form part of the picture. An additional type ``CPU'' is defined as the State monad containing the Machine type. This monadic wrapping of Machine allows for stateful computation to be performed within the limits of Haskell's pure, referentially transparent programming environment and is sufficient to model the running processor.
+
+In addition to these types are a number of functions for manipulating the state of the machine. A driving function $run$ recursively executes the program in memory until a ``HALT''\footnote{The ``HALT'' instruction is not in the ARM specification and will be discussed in greater detail later} pseudo-instruction is encountered. A source code listing for the $run$ function is found in \autoref{lst:runFunc}.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $run$ function},label={lst:runFunc}]
+run :: CPU ()
+run = do
+    running <- gets executing
+    when running $\$$ do
+        stalled <- isStalled
+        if stalled then
+            modify reduceStall
+        else do
+            modify pipeline
+            execute =<< gets executeR
+            modify incPC
+        run
+\end{lstlisting}
+
+This function drives the pipelining of instructions, stalling of execution, and incrementing of the program counter as well as invoking the $execute$ function which takes an instruction and modifies the processor state with the result of executing it.
+
+Execution of most instructions is handled by the ALU, however the CPU executes branch and memory load and store operations directly as I felt these did not fall under the purview of arithmetic or logic and related instead directly to the machine state. Execution of instructions is driven by a function $execute$ (\autoref{lst:exFunc}) which wraps a helper function --- $execute'$ --- with additional logic to stall execution based on the instruction and trigger a pipeline flush if execution of an instruction modifies the program counter, thereby allowing the semantics of individual instructions enumerated by execute' to be described in the absence of these concerns.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $execute$ function},label={lst:exFunc}]
+execute :: Maybe Instruction -> CPU ()
+execute Nothing = return ()
+execute (Just i) =
+    do rf_pre <- gets registers
+       execute' i
+       modify $\$$ stallMachine i
+       rf_post <- gets registers
+       when (rf_pre `Reg.get` Reg.PC /= rf_post `Reg.get` Reg.PC) $\$$
+           modify flushPipeline
+\end{lstlisting}
+
+An example of the implementation of the $execute'$ function for the LDR (load machine word) instruction is shown in \autoref{lst:ldrExecFunc}. This example demonstrates that the CPU does utilise the ALU in executing load and store operations (the function computeAddress is defined by the ALU). This example illustrates the relative ease with which instructions are defined, requiring 
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $execute'$ function for LDR},label={lst:ldrExecFunc}]
+execute' :: Instruction -> CPU ()
+execute' (LDR cond (ArgR dest) addrm) =
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
+       when (checkCondition cond sr) $\$$ do
+           let (addr,rf') = computeAddress addrm rf sr
+               rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
+           put $\$$ machine { registers = rf'' }
+\end{lstlisting}
+
+
+\subsection{Register File}
+\label{subsec:rf}
+The Register File is implemented as a record type containing sixteen fields corresponding to the sixteen registers of the ARM7TDMI, R0 through R15. Each of these fields is a single signed 32 bit integer. However, in Haskell record types expose their accessors for getting and setting values as functions. The overhead introduced by using these functions throughout the simulator necessitated introducing an additional layer of abstraction.
+
+Rather than use the Haskell generated record accessors I introduced additional datatype ``Register'' with nullary data constructors corresponding to the names of the different registers in the ARM7TDMI.\@ These data constructors provide a symbolic representation of the registers. Two functions, $get$ and $set$ allow these symbols to be used on a register file to fetch or update values.
+
+This additional abstraction yields a number of benefits. Since at this level registers are represented as data rather than functions, they can be easily manipulated and used in pattern matching and other control flow constructs in \emph{Handy}'s source code. Another benefit of this style is to allow for simple aliasing of registers: two names can be made to refer to the same register in the RegisterFile record by mapping them appropriately. This is useful as in ARM assembly language such synonyms appear frequently for example the register R15 serves as the program counter and can be referenced as PC.
+
+\subsection{Status Register}
+\label{subsec:cpsr}
+The Status Register or CPSR is implemented as a record type containing four fields representing each of the Carry, Zero, Negative and Overflow flags specified in the ARM Architecture Reference Manual\citep[pp. A3-29]{armarm:2005}. Each of these fields is a boolean value.
+
+%----------------------------------------------------------------------------------------
+
+\section{Arithmetic Logic Unit}
+\label{sec:alu}
+
+Implementation of the ALU takes the form of a number of pure functions with no declarations of data types. A single function $compute$ serves as an entry point to be invoked by the CPU when executing an instruction. This function takes as its arguments the instruction to be executed and a register file and status register to serve as context for the execution, and yields as the result of its evaluation a new register file and status register. The source code listing for the $compute$ function may be seen in \autoref{lst:computeFunc}.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $compute$ function},label={lst:computeFunc}]
+compute :: Instruction
+        -> RegisterFile
+        -> StatusRegister
+        -> (RegisterFile, StatusRegister)
+compute i rf sr = (rf',sr'') where (rf',sr') = compute' i rf sr
+                                   sr''      = case getS i of
+                                                   S   -> sr'
+                                                   NoS -> sr
+\end{lstlisting}
+
+The main work of the $compute$ function is shifted to a helper, $compute'$, which utilises pattern matching on instructions to select appropriate behavior. compute' in turn delegates its work to a higher order function $computeArith$ except in the case of the SMULL and SMLAL instructions\footnote{SMULL is Signed Multiply Long, a 64-bit version of multiplication. SMLAL is Signed Multiply Long with Accumulate, which takes a third argument and adds the result of multiplication to it} which require unique implementation to accommodate their implementation. Some example listings of the $compute'$ function can be found in \autoref{lst:computeHelperFunc}, which highlights the brevity with which the semantics of instructions can be defined and the similarity of implementation between various instructions.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $compute'$ helper function for ADD, SUB and AND},label={lst:computeHelperFunc}]
+compute' :: Instruction
+         -> RegisterFile
+         -> StatusRegister
+         -> (RegisterFile, StatusRegister)
+
+compute' (ADD cond _ dest src1 src2 shft) rf sr =
+    computeArith (+) dest src1 arg2 cond sr rf setSRarith2
+    where arg2             = ArgC shiftresult
+          (shiftresult, _) = computeShift src2 shft rf sr
+
+compute' (SUB cond _ dest src1 src2 shft) rf sr =
+    computeArith (-) dest src1 arg2 cond sr rf setSRarith3
+    where arg2             = ArgC shiftresult
+          (shiftresult, _) = computeShift src2 shft rf sr
+
+compute' (AND cond _ dest src1 src2 shft) rf sr =
+    computeArith (.&.) dest src1 arg2 cond sr' rf setSRarith1
+    where arg2               = ArgC shiftresult
+          (shiftresult, sr') = computeShift src2 shft rf sr
+\end{lstlisting}
+
+The source code listing of the $computeArith$ function is seen in \autoref{lst:computeArithFunc}. It takes as its arguments a binary operation to apply to the two source arguments of the instruction to be executed and the destination register in which to store the result, the condition under which the instruction is to be executed, the status register and register file, and a function with which to update the status register. This additional abstraction of the status register update was found necessary in the course of implementation as not all instructions defined in the ARM4T ISA update all status flags, or can have exceptional effects on certain status flags, to the point of being not so easily generalised. The computeArith function, the functions used to update the status register and the binary operations applied to arguments by the $computeArith$ function are based directly on the pseudocode listings describing the semantics of each instruction found in the ARM Architecture Reference Manual.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $computeArith$ function},label={lst:computeArithFunc}]
+computeArith :: (Int32 -> Int32 -> Int32)
+              -> Destination
+              -> Argument a
+              -> Argument b
+              -> Condition
+              -> StatusRegister
+              -> RegisterFile
+              -> (Int32 -> Int32 -> Int32 -> StatusRegister -> StatusRegister)
+              -> (RegisterFile, StatusRegister)
+
+computeArith op dest src1 src2 cond sr rf srupdate =
+    case checkCondition cond sr of
+        False -> (rf, sr)
+        True  -> (rf', sr') where
+            a      = src1 `eval` rf
+            b      = src2 `eval` rf
+            result = a `op` b
+            rf'    = set rf dest result
+            sr'    = srupdate a b result sr
+\end{lstlisting}
+
+The ALU also computes the result of applying the data processing operations described in \autoref{subsec:shiftop}. This is implemented in similar fashion to the $compute$ function described above, with a function $computeShift$ serving as an entry point and using pattern matching to delegate to the appropriate helper function. The source code listing for the computeShiftL helper used in the calculation of leftward shifts is shown in \autoref{lst:computeShiftLFunc}, and is illustrative of the implementation of the various other data processing operations.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $computeShiftL$ function},label={lst:computeShiftLFunc}]
+computeShiftL :: (Num a, Bits a)
+              => a
+              -> Argument b
+              -> RegisterFile
+              -> StatusRegister
+              -> (a, StatusRegister)
+
+computeShiftL val shft rf sr =
+    (result, sr')
+    where result = val `shiftL` degree
+          degree = fromIntegral $\$$ shft `eval` rf
+          sr' | degree == 0 = sr
+              | degree <= 32 = sr { carry = val `testBit` (32 - degree) }
+              | otherwise = sr { carry = False }
+\end{lstlisting}
+
+The final responsibilities of the ALU include computing branch and address offsets for the CPU. These are included in the ALU for the sake of consistency of responsibility despite their only being evaluated by functions in the CPU.
+
+%------------------------------------------------
+
+\section{Memory}
+\label{sec:implementation:memory}
+
+As discussed in \autoref{sec:design:memory} the main design requirement for the memory component is not an accurate simulation of the full memory infrastructure of the ARM7TDMI. To satisfy the simulator's requirements memory must be a data structure that contains bytes and is indexed by 32-bit integers. The original implementation was an array of $2^{32}$ bytes, however this proved not to be viable as allocating such a large block of memory caused a runtime crash when the Haskell runtime's heap was filled over capacity.
+
+The original array-based implementation was replaced with a library data structure, Data.IntMap, which is implemented internally as a Radix Tree. Data.IntMap utilises Haskell's lazy evaluation such that only memory locations that contain a value are instantiated on the heap. This implementation does sacrifice the $O(1)$ performance characteristics of an array in favour of $O(min(n,W))$, where n is the number of elements and W is the width of a machine word --- sub-optimal but still sufficiently performant for our purposes considering performance is not a primary concern.
+
+The standard library functions specified by Data.IntMap are wrapped to provide functions for reading and writing 8-, 16-, or 32-bit Big Endian values. The 8-bit version of these is shown in \autoref{lst:readMemFuncs}. The 16-bit functions are implemented in terms of the 8-bit functions, and the 32-bit functions in terms of the 16-but functions.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The read and write Memory functions},label={lst:readMemFuncs}]
+getByte :: Memory -> Word32 -> Word8
+getByte mem a = M.findWithDefault 0 (fromIntegral a) mem
+
+writeByte :: Memory -> Word32 -> Word8 -> Memory
+writeByte mem a v = M.insert (fromIntegral a) v mem
+\end{lstlisting}
+
+%------------------------------------------------
+
+\section{Instruction Decoder}
+\label{sec:decoder}
+
+The Instruction Decoder is a substantial component of the simulator. It is in effect a simple disassembler for ARM machine code built to decode the bit patterns specified in the ARM Architecture Reference Manual\citep[ch. A3]{armarm:2005}. The decoder is implemented using the Get monad from Haskell's Data.Binary package. Use of the Get monad was not explicitly required for implementation of the decoder but yielded compelling benefits for speed and correctness of development by providing access to Haskell's ``Alternative'' type class for use in parser combinators.
+
+Instruction words are passed to the decoder as a ByteString, the format utilised by Data.Binary's Get monad. Parsing of binary representations of ARM instructions takes place in stages. As all ARM instructions contain a condition field as described in \autoref{sec:appendix:conditions} this field is extracted immediately. The Condition data type described in \autoref{subsec:implementation:condition} is structured as an enumeration of the same structure as the condition codes detailed in \autoref{sec:appendix:conditions} and derives the Enum type class. This allows a direct transformation of the uppermost four bits to the Condition data type, as shown in \autoref{lst:decodeConditionFunc}.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $decodeCondition$ function},label={lst:decodeConditionFunc}]
+decodeCondition :: G.Get Condition
+decodeCondition = do byte <- G.getWord8
+                     let cond = toEnum $\$$ fromIntegral $\$$ byte `shiftR` 4
+                     return cond
+\end{lstlisting}
+
+The only other field contained in all instruction words is the ``instruction family'' sequence in bits 25 through 27 as described in \autoref{sec:appendix:instruction_families}. This field is extracted and used to select the parser to be used in parsing the remaining bits. An example of one of these further parsing functions appears in \autoref{lst:decodeType0Func}, showing the parser for instructions in the ``000'' family. \autoref{lst:decodeType0Func} highlights the use of Haskell's Control.Applicative.Alternative operator \lstinline!<|>! in implementing the Instruction Decoder. In this example, the decoder first attempts to parse using the decodeDataOp\footnote{A DataOp is any arithmetic or logic instruction other than multiplication. This distinction and the details of it are discussed in depth in \autoref{appendix:instructions}} function. If this function fails to parse an instruction from the input its effects are discarded and the decodeMultiply instruction is applied instead. If at any point a function successfully parses an instruction from the input data that instruction is returned and no further parsing occurs.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $decodeType0$ function},label={lst:decodeType0Func}]
+decodeType0 :: Condition -> G.Get Instruction
+decodeType0 cond =  decodeDataOp cond decodeDataShiftImm
+                <|> decodeMultiply cond
+                <|> decodeMisc cond
+                <|> decodeDataOp cond decodeDataShiftReg
+                <|> junk
+\end{lstlisting}
+
+Each of the parsing functions applied at this level follows a similar pattern. The separate fields of the instruction are extracted from the correct positions in the input stream --- in the case of a DataOp this means extracting the destination register and source registers, the ``S'' bit\footnote{See \autoref{sec:appendix:sbit}}, and the opcode. These fields can then be combined to form the instruction, as shown in \autoref{lst:decodeDataOpFunc}. While these examples apply only to one type of instruction (albeit the most numerous type), the process is essentially the same for all other types.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The decodeDataOp makeInstruction functions},label={lst:decodeDataOpFunc}]
+decodeDataOp :: Condition
+             -> G.Get (Argument a, ShiftOp b)
+             -> G.Get Instruction
+
+decodeDataOp cond parser =
+    do (src2, shft) <- G.lookAhead parser
+        s <- G.lookAhead decodeS
+        opcode <- G.lookAhead getOpcode
+        src1 <- G.lookAhead decodeRegisterSrc
+        dest <- G.lookAhead decodeRegisterDest
+        makeInstruction opcode cond s dest src1 src2 shft
+
+makeInstruction opcode cond s dest src1 src2 shft =
+    case opcode of
+        0 -> return $\$$ AND cond s dest src1 src2 shft
+        1 -> return $\$$ EOR cond s dest src1 src2 shft
+        2 -> return $\$$ SUB cond s dest src1 src2 shft
+            ...
+        14 -> return $\$$ BIC cond s dest src1 src2 shft
+        15 -> return $\$$ MVN cond s dest src2 shft
+        _  -> empty
+\end{lstlisting}
+
+%-----------------------------------------------
+
+\section{Instruction Encoder}
+
+The final piece is a rudimentary assembler that converts \emph{Handy}'s Instruction data type to binary form. This allows programs to be executed to be written in Haskell notation rather than passed as binary to the running simulator, as well as rapid testing of the validity of Instruction Decoder outputs. This component is not part of the original design, and was instead written as a tool for development and is included in the source for completeness' sake.
+
+The encoder provides a suite of serialising functions for converting instruction fields to 32 bit words using Haskell's Data.Bits (a package containing bitwise operations) to assemble them manually. This is simple to conceptualise and implement using the ARM Architecture Reference Manual\citep{armarm:2005} as a blueprint, though leads to somewhat verbose function definitions. Steps were taken to minimise this as much as possible but as this component is treated as being outside of the true scope of the project it saw only enough effort as was required to make it viable and useful for development purposes.
+
+\autoref{appendix:instructions} goes into great detail as regards the binary structure of ARM instructions, and the Instruction Encoder implements these rules dogmatically. \autoref{lst:serialiseMulFunc} shows an illustrative example of how these functions are implemented. The \lstinline!.|.! operator seen in \autoref{lst:serialiseMulFunc} represents bitwise OR.
+
+\begin{lstlisting}[mathescape,numbers=none,caption={The $serialiseInstruction$ function for MUL},label={lst:serialiseMulFunc}]
+serialiseInstruction (MUL cond s dest (ArgR src1) (ArgR src2))
+    =  serialiseCondition cond
+   .|. serialiseS s
+   .|. serialiseReg 16 dest
+   .|. serialiseReg 0  src1
+   .|. serialiseReg 8  src2
+   .|. bit 4
+   .|. bit 7
+\end{lstlisting}

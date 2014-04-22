@@ -1,0 +1,17 @@
+% Chapter X
+
+\chapter{Conclusions} % Chapter title
+
+\label{ch:conclusion} % For referencing the chapter elsewhere, use \autoref{ch:name}
+
+%----------------------------------------------------------------------------------------
+
+I am very satisfied with how Handy has taken shape over the course of recent months. Handy met and exceeded the original specification of a minimum viable simulator, and has been a joy to work on. Handy implements the vast majority of the ARM4T instruction set in a semantically correct fashion, and generally exceeded even my own expectations. The potential for Handy to continue growing into an even more capable tool as detailed in \autoref{ch:furtherwork} is an exciting prospect, and one which I have a mind to pursue in my own time in the future.
+
+The majority of work in proving the correctness of implementation in Handy was done manually, using the ARM Architecture Reference Manual's pseudo-code operational semantics for each instruction as a guide. I have, however, had the opportunity to compare Handy to a physical ARM7TDMI in Trinity College Dublin in recent weeks. The results of this test were outstandingly positive, producing identical results on all test programs.
+
+Even so, Handy is not perfect. As mentioned in \autoref{ch:furtherwork} the modeling of the Instruction data type in particular is sub-optimal but I did not feel confident refactoring such an integral part of the system by the time these problems came to light. A better implementation using the knowledge gained from this first attempt could potentially mean significant improvements in the readability and maintainability of the code base, and allow for the introduction of automatic testing using QuickCheck to provide an additional level of correctness guarantees going forwards.
+
+The most challenging part of developing a system like Handy is complete --- reaching the first useful iteration. Whether it proves to be sufficient in its current state or sees further development in coming years remains to be seen.
+
+%----------------------------------------------------------------------------------------

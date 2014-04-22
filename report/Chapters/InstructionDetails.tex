@@ -1,0 +1,198 @@
+% Appendix X
+
+\chapter{In-depth Review of ARM Instruction structure}
+\label{appendix:instructions}
+
+%----------------------------------------------------------------------------------------
+
+\section{Condition Codes}
+\label{sec:appendix:conditions}
+
+Bits 28 through 31 of any ARM instruction word denote the condition code for the instruction. The ``NV'' condition code, which is architecturally undefined on the ARM4T architecture, is co-opted to serve as the ``HALT'' pseudo-instruction used to tell \emph{Handy} to end simulation. This is required as no equivalent instruction exists in the actual processor. \autoref{table:conditions} lists all condition bit fields and the condition they refer to.
+
+\begin{table}
+  \caption{ARM Condition Codes and their meanings\citep[pp. A3-4]{armarm:2005}}
+  \label{table:conditions}
+  \begin{tabularx}{\textwidth}{l|l|X|X}
+    Bits 31:28 & Name & Meaning & Flag States \\ \hline
+    0000 & EQ & Equal & Z set \\ \hline
+    0001 & NE & Not Equal & Z clear \\ \hline
+    0010 & CS/HS & Carry set/unsigned higher or same & C set \\ \hline
+    0011 & CC/LO & Carry clear/unsigned lower & C clear \\ \hline
+    0100 & MI & Minus/negative & N set \\ \hline
+    0101 & PL & Plus/positive or zero & N clear \\ \hline
+    0110 & VS & Overflow & V set \\ \hline
+    0111 & VC & No overflow & V clear \\ \hline
+    1000 & HI & Unsigned higher & C set and Z clear \\ \hline
+    1001 & LS & Unsigned lower or same & C clear or Z set \\ \hline
+    1010 & GE & Signed greater than or equal & N equal to V \\ \hline
+    1011 & LT & Signed less than & N not equal to V \\ \hline
+    1100 & GT & Signed greater than & Z clear and N equal to V \\ \hline
+    1101 & LE & Signed less than or equal & Z set or N not equal to V \\ \hline
+    1110 & AL & Always & True \\ \hline
+    1111 & X & Undefined for ARM4T architecture & X
+  \end{tabularx}
+\end{table}
+
+
+\section{Instruction Families}
+\label{sec:appendix:instruction_families}
+
+Bits 25 through 27 of the instruction word divide the remaining possible values into one of eight families. This is not explicitly stated in any literature read in the course of implementing this simulator but was instead observed from Figure A3-1 of the ARM Architecture Reference Manual\citep[pp. A3-2]{armarm:2005}. This information simplified implementation of the parser, especially so since two of the eight families contained no instructions required by the simulator\footnote{Coprocessor manipulating instructions and software interrupts}.
+
+\begin{table}
+  \caption{Instruction Families}
+  \label{table:families}
+  \begin{tabularx}{\textwidth}{l|X}
+    Bits 27:25 & Family \\ \hline
+    \multirow{5}{*}{000} & Data processing immediate shift \\
+                         & Data processing register shift \\
+                         & Miscellaneous Instruction \\
+                         & Multiplies \\
+                         & Extra Loads/Stores (not implemented) \\ \hline
+    \multirow{3}{*}{001} & Data processing immediate value \\
+                         & Move immediate to status register (not implemented) \\
+                         & Undefined instruction \\ \hline
+    010 & Load/store immediate offset \\ \hline
+    \multirow{3}{*}{011} & Load/Store register offset \\
+                         & Media instruction (not implemented) \\
+                         & Architecturally undefined \\ \hline
+    100 & Load/Store Multiple \\ \hline
+    101 & Branch / Branch and Link \\ \hline
+    \multirow{2}{*}{110} & Coprocessor Load/Store (not implemented) \\
+                         & Double Register Transfers (not implemented) \\ \hline
+    \multirow{3}{*}{111} & Coprocessor Data Processing (not implemented) \\
+                         & Coprocessor Register Transfer (not implemented) \\
+                         & Software Interrupt (not implemented)
+  \end{tabularx}
+\end{table}
+
+
+
+\section{Opcodes and Data-processing Instructions}
+\label{sec:appendix:opcodes}
+
+For instructions other than memory loads and stores and multiplications, bits 21 through 24 hold the opcode. These instructions are split across two of the ``families'' described in \autoref{sec:appendix:instruction_families} depending on whether the third operand of the instruction is an immediate or register value. These opcodes represent what the ARM Architecture Reference Manual describes as ``Data-processing instructions''\citep[pp. A3-7]{armarm:2005}, and all of these sixteen data processing instructions share similar structures in their binary representations. Multiplications and memory operations are exceptional and have neither opcodes in this sense nor similar structures to data-processing instructions. The sixteen data-processing instructions and their opcodes are shown in \autoref{table:opcodes}
+
+\begin{table}
+  \caption{Data-processing Instructions and their Opcodes\citep[pp. A3-7]{armarm:2005}}
+  \label{table:opcodes}
+  \begin{tabularx}{\textwidth}{l|l}
+  Opcode & Instruction \\ \hline
+  0000 & AND - Logical AND \\ \hline
+  0001 & EOR - Logical Exclusive OR \\ \hline
+  0010 & SUB - Subtract \\ \hline
+  0011 & RSB - Reverse Subtract \\ \hline
+  0100 & ADD - Add \\ \hline
+  0101 & ADC - Add with Carry \\ \hline
+  0110 & SBC - Subtract with Carry \\ \hline
+  0111 & RSC - Reverse Subtract with Carry \\ \hline
+  1000 & TST - Test \\ \hline
+  1001 & TEQ - Test Equivalence \\ \hline
+  1010 & CMP - Compare \\ \hline
+  1011 & CMN - Compare Negated \\ \hline
+  1100 & ORR - Logical (inclusive) OR \\ \hline
+  1101 & MOV - Move \\ \hline
+  1110 & BIC - Bit Clear \\ \hline
+  1111 & MVN - Move Not
+\end{tabularx}
+\end{table}
+
+
+\subsection{Data-processing Instruction Operands}
+\label{sec:appendix:opcodes:operands}
+
+For data processing instructions the destination and first source value must be registers. Bits 12 through 15 denote the destination register while bits 16 through 19 represent the source register. The second source operand is a ``data-processing operand'' as defined in Section A5.1 of the ARM Architecture Reference Manual\citep[pp. A5-2]{armarm:2005}, which can be any of an immediate value, a register, or a register with some logical or arithmetic shift or rotation applied to it.
+
+If the instruction family bits of the instruction word are ``000'' then the least significant twelve bits of the instruction word are interpreted as a register value with some operation (possibly the identity operation) applied to it. In this case, bits 0 through 3 specify the register number. Bits 5 and 6 specify the manner of transformation to apply\footnote{00 = shift left, 01 = logical shift right, 10 = arithmetic shift right, 11 = rotate right}. Bit 4 specifies whether the register is to be shifted by an immediate value or by a value taken from a register. If bit 4 is clear bits 7 through 11 represent a 5 bit immediate value by which to shift the value in the source register. If bit 4 is set bit 7 must be clear and bits 8 through 11 represent the register from which to take the value by which to shift the value in the source register. There are two special cases of the above:
+
+\begin{enumerate}
+    \item A register with no operation applied to it is represented as a shift left by an immediate value of 0.
+    \item A rotate right by an immediate value of zero is a ``rotate right with extend'' operation, which shifts the instruction operand in the specified register by one position to the right and inserts a 1 at the vacated most significant bit if the carry flag was set and a 0 otherwise. The carry out from the shifter is the least significant bit of the original value, though this does not necessarily replace the carry flag in the CPU's status register.
+\end{enumerate}
+
+Conversely, if the instruction family bits of the instruction word are ``001'' then the least significant twelve bits of the instruction word are interpreted as an immediate value, with bits 0 through 7 being an eight bit constant and bits 8 through 11 a four bit rotation. The actual value of the immediate is calculated by left shifting the four bit rotation value by one place and then right-rotating the eight bit constant by that many positions. This allows the ARM instruction set to represent immediate values much larger than 12 bits would allow, but for constants larger than 255 only some values are valid and representable with this encoding.
+
+\section{Multiplication Instructions}
+
+There are six possible multiplication instructions in the ARM4T instruction set. They are respectively:
+
+\begin{enumerate}
+  \item MUL - Multiplies the value of two registers together, truncates the result to 32 bits, and stores the result in a third register.\citep[Section A3.5.1, pp. A3-10]{armarm:2005}
+    \item MLA - Multiplies the value of two registers together, adds the value of a third register, truncates the result to 32 bits, and stores the result in a fourth register.\citep[Section A3.5.1, pp. A3-10]{armarm:2005}
+    \item SMULL and UMULL - Multiply the values of two registers together and store the 64-bit result in two parts in a third and a fourth register. SMULL treats operands as signed and UMULL treats operands as unsigned.\citep[Section A3.5.2, pp. A3-10]{armarm:2005}
+    \item SMLAL and UMLAL - Multiply the values of two registers together and and add the resultant 64-bit value to a 64-bit value taken from a third and a fourth register, then store the final value back in the third and fourth registers in two parts.\citep[Section A3.5.2, pp. A3-10]{armarm:2005}
+\end{enumerate}
+
+Multiplies are part of instruction family ``000'' and are distinguished from data-processing operations by having both bits 4 and 7 set and bits 5 and 6 are clear. Bit 23 specifies whether the instruction produces a 32- or 64-bit result. If bit 23 is set the instruction is a ``long'' multiplication and bit 22 specifies whether it is the signed or unsigned variant. Bit 22 must be clear if bit 23 is clear. Bit 21 specifies whether the instruction is an accumulate variant.
+
+Unlike data-processing instructions, multiplication instructions can only have register operands and cannot have immediate values specified. Bits 0 through 3 represent the left source operand and bits 8 through 11 represent the right source operand. For MUL, bits 12 through 15 are specified as ``Should Be Zero'' though other values do not cause an error. For MLA, bits 12 through 15 specify the source of the accumulator value that should be added to the result of the multiplication before storing in the destination register. For all 64-bit variants bits 12 through 15 specify the destination for the least significant 32 bits of the result. Bits 16-19 specify the destination register for MUL and MLA or the destiation for the most significant 32 bits of the result otherwise.
+
+\section{The S Bit}
+\label{sec:appendix:sbit}
+
+Data-processing and multiplication instructions can optionally\footnote{Or necessarily, in the case of CMP, CMN, TST and TEQ instructions, though this is also accomplished using the S bit where its being unset is an undefined instruction\citep[pp. A3-7]{armarm:2005}} update the status flags of the CPU. Whether this occurs is decided by bit 20 of the instruction word, referred to as the ``S bit''\citep[pp. A3-7]{armarm:2005}, and the method by which an instruction updates the status flags with its result varies by instruction.
+
+\section{Load and Store Instructions}
+\label{sec:appendix:loadstore}
+
+Load and Store instructions have yet another distinct structure, and are divided across two instruction families depending on whether the addressing mode uses a register or immediate value as an offset. Bit 20 specifies whether the instruction is a load (bit 20 is set) or a store (bit 20 is clear) instruction. Bit 22 specifies whether the instruction loads a byte (bit 22 is set) or a word (bit 22 is clear) value. Bits 21, 23, 24, and 25 specify the addressing mode and bits 0 through 11 are addressing mode specific. Bits 16 through 19 specify the register containing the base address and bits 12 through 15 specify the register whose contents are either to be stored or replaced by the loaded value.
+
+\subsection{Load and Store Addressing Modes}
+\label{subsec:appendix:loadstore:addressingmode}
+
+Broadly, there are three\citep[pp. A5-18]{armarm:2005} types of addressing mode for Load and Store instructions:
+
+\begin{enumerate}
+    \item Immediate offset/index
+    \item Register offset/index\footnote{Though the Register offset/index class can be considered a special case of Scaled register offset/index the ARM Architecture Reference manual treats them separately}
+    \item Scaled register offset/index
+\end{enumerate}
+
+Bit 23 is referred to by the ARM Architecture Reference Manual as the ``U'' bit, and specifies whether the offset described by bits 0 through 11 is to be added or subtracted from the base address. If the U bit is set, the offset is added. If the U bit is clear, the offset is subtracted.
+
+Bits 21 and 24 are referred to as the ``W'' and ``P'' bits respectively, and their meanings dependent on each other and are shown in \autoref{table:pwbits}.
+
+\begin{table}
+  \caption{Meanings of P and W bits in Memory Operations\citep[pp. A5-19]{armarm:2005}}
+\label{table:pwbits}
+\begin{tabularx}{\textwidth}{l|l|X}
+  P & W & Meaning \\ \hline
+  0 & 0 & Post-indexed addressing: Value taken from base address register and used as address, then the offset is applied and the result written back to the base address register. \\ \hline
+  0 & 1 & Unprivileged operation: The memory operation is performed in User mode. As this simulator does not implement modes other than Supervisor mode, this is undefined for our purposes. \\ \hline
+  1 & 0 & Offset addressing: Offset applied to value in base address register to create the address, but the modified value is discarded after the operation. \\ \hline
+  1 & 1 & Pre-indexed addressing: Offset applied to the value taken from the base address register and used as the address for the operation. After the operation the base address register is updated with the result of applying the offset.
+\end{tabularx}
+\end{table}
+
+Whether an addressing mode uses an immediate or register offsetis decided by bit 25\footnote{Which is one of the bits I describe as deciding the ``instruction family'', ergo immediate indexed loads and stores reside in a separate instruction family to register indexed loads and stores}, with bit 25 being set indicating a register indexed addressing mode.
+
+The offset value is represented by bits 0 through 11. In immediate addressing mode bits 0 through 11 are treated as a 12-bit constant and directly. In register and scaled register addressing modes bits 0 through 3 specify the register containing the offset and bit 4 must be zero. Bits 5 and 6 represent the scaling type, using the same scheme and semantics as described in \autoref{sec:appendix:opcodes:operands}. Bits 7 through 11 specify the amount by which the offset is to be shifted.
+
+\section{Load and Store Multiple Instructions}
+
+Distinct from ordinary load and store instructions are what the ARM Architecture Reference Manual refers to as ``Load and Store Multiple'' instructions\citep[pp. A3-26]{armarm:2005}. These instructions reside in an entirely separate instruction family and have a unique bit pattern. Load and Store Multiple instructions are composed of five distinct parts:
+
+\begin{enumerate}
+    \item A register list represented as a bit array in bits 0 through 15, with bit 0 representing R0 and bit 15 representing R15 and set bits denoting membership in the set. The registers listed are those to be populated with loaded values or to have their values stored in memory.
+    \item The P, U and W bits (bits 24, 23 and 20 respectively). The P and U bits specify the addressing mode for the instruction and the W bit specifies whether the base address register is to be updated by execution of the instruction.
+    \item The S bit (bit 22) the purpose of which pertains to privileged or unprivileged execution modes and therefor falls outside of the bounds of the simulator, meaning it is ignored.
+    \item The L bit (bit 20) which distinguishes between a Load and a Store operation (set and unset respectively).
+    \item The base address register specified by bits 16 through 19.
+\end{enumerate}
+
+\subsection{Load and Store Multiple Addressing Modes}
+
+Load and Store Multiple instructions must be in one of four addressing modes, which describe the manner in which the base address register is modified when storing the registers specified by the register list. Each addressing mode is known by two names, with one name being most useful when describing block data transfer operations and another name for the same mode in terms of stack operations. These names and how they relate to the P and U bits appear in \autoref{table:ldm_modes}
+
+\begin{table}
+  \caption{Load and Store Multiple Addressing Modes and the P and U bits\citep[pp. A5-42]{armarm:2005}}
+\label{table:ldm_modes}
+\begin{tabularx}{\textwidth}{l|l|X}
+  P & U & Name and Meaning \\ \hline
+  0 & 0 & DA/FA (Decrement After / Full Ascending) - Base address register decremented by 4 after each register\\ \hline
+  0 & 1 & IA/FD (Increment After / Full Descending) - Base address register incremented by 4 after each register\\ \hline
+  1 & 0 & DB/EA (Decrement Before / Empty Ascending) - Base address register decremented by 4 before each register\\ \hline
+  1 & 1 & IB/ED (Increment Before / Empty Descending) - Base address register incremented by 4 before each register
+\end{tabularx}
+\end{table}

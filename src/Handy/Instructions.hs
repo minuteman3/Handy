@@ -209,6 +209,8 @@ data Instruction where
     MLA   :: Condition -> S -> Destination -> Argument Register -> Argument Register -> Argument Register -> Instruction
     SMULL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
     SMLAL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
+    UMULL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
+    UMLAL :: Condition -> S -> Destination -> Destination -> Argument Register -> Argument Register -> Instruction
     CMP   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TST   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction
     TEQ   :: Condition -> Argument Register  -> Argument a -> ShiftOp b -> Instruction

@@ -46,26 +46,26 @@ decode' = do condition <- G.lookAhead decodeCondition
                            7 -> return JunkInstruction -- Coprocessor data processing OR
                                                            -- Coprocessor register transfers OR
                                                            -- Software interrupt
-                           _ -> fail "Invalid instruction type"
+                           _ -> return JunkInstruction
 
 junk :: G.Get Instruction
 junk = return JunkInstruction
 
 decodeType0 :: Condition -> G.Get Instruction
-decodeType0 cond = decodeDataOp cond decodeDataShiftImm
+decodeType0 cond =  decodeDataOp cond decodeDataShiftImm
                 <|> decodeMultiply cond
                 <|> decodeMisc cond
                 <|> decodeDataOp cond decodeDataShiftReg
                 <|> junk
 
 decodeType2 :: Condition -> G.Get Instruction
-decodeType2 cond = decodeLoadStore cond decodeAddrImm
+decodeType2 cond = decodeLoadStore cond decodeAddrImm <|> junk
 
 decodeType3 :: Condition -> G.Get Instruction
-decodeType3 cond = decodeLoadStore cond decodeAddrReg
+decodeType3 cond = decodeLoadStore cond decodeAddrReg <|> junk
 
 decodeType4 :: Condition -> G.Get Instruction
-decodeType4 = decodeLoadStoreMulti
+decodeType4 cond = decodeLoadStoreMulti cond <|> junk
 
 
 mulMask :: Word32
@@ -106,9 +106,25 @@ decodeSMULL cond = do word <- G.lookAhead G.getWord32be
                           return $ SMULL cond s dest1 dest2 src1 src2
                       else empty
 
+decodeUMULL :: Condition -> G.Get Instruction
+decodeUMULL cond = do word <- G.lookAhead G.getWord32be
+                      if word .&. mulMask == (bit 23) then do
+                          s <- G.lookAhead decodeS
+                          let (src1,src2,dest1,dest2) = getSMoperands word
+                          return $ UMULL cond s dest1 dest2 src1 src2
+                      else empty
+
 decodeSMLAL :: Condition -> G.Get Instruction
 decodeSMLAL cond = do word <- G.lookAhead G.getWord32be
                       if word .&. mulMask == (bit 23 .|. bit 22 .|. bit 21) then do
+                          s <- G.lookAhead decodeS
+                          let (src1,src2,dest1,dest2) = getSMoperands word
+                          return $ SMLAL cond s dest1 dest2 src1 src2
+                      else empty
+
+decodeUMLAL :: Condition -> G.Get Instruction
+decodeUMLAL cond = do word <- G.lookAhead G.getWord32be
+                      if word .&. mulMask == (bit 23 .|. bit 21) then do
                           s <- G.lookAhead decodeS
                           let (src1,src2,dest1,dest2) = getSMoperands word
                           return $ SMLAL cond s dest1 dest2 src1 src2
@@ -239,7 +255,7 @@ makeInstruction opcode cond s dest src1 src2 shft = case opcode of
                                 13 -> return $ MOV cond s dest src2 shft
                                 14 -> return $ BIC cond s dest src1 src2 shft
                                 15 -> return $ MVN cond s dest src2 shft
-                                _  -> fail "Invalid opcode"
+                                _  -> empty
 
 decodeMSR :: G.Get Instruction
 decodeMSR = empty
@@ -248,7 +264,8 @@ decodeUndefined :: G.Get Instruction
 decodeUndefined = empty
 
 decodeType5 :: Condition -> G.Get Instruction
-decodeType5 cond = do word <- G.getWord32be
+decodeType5 cond = helper <|> junk
+    where helper = do word <- G.getWord32be
                       let l = word `testBit` 24
                           offset = toArgument $ fromIntegral $ word .&. bitmask 24
                       return $ if l then BL cond offset else B cond offset
@@ -284,7 +301,11 @@ decodeDataShiftImm = do word <- G.lookAhead G.getWord32be
                         if word `testBit` 4 then
                             empty
                         else
-                            decodeShiftLImm <|> decodeShiftRImm <|> decodeShiftAImm <|> decodeRotateImm <|> empty
+                            decodeShiftLImm
+                        <|> decodeShiftRImm
+                        <|> decodeShiftAImm
+                        <|> decodeRotateImm
+                        <|> empty
 
 decodeDataShiftReg :: G.Get (Argument Register, ShiftOp Register)
 decodeDataShiftReg = do word <- G.lookAhead G.getWord32be

@@ -22,22 +22,22 @@ demoProg = [MOV AL NoS R0 (ArgC 32) NoShift,
             B   NE (ArgC $ negate 6),
             HALT]
 
-
-testProg :: Program
 newMachine :: Memory -> Machine
-newMachine mem = Machine { registers = blankRegisterFile
-                         , memory    = mem
-                         , cpsr      = blankStatusRegister
-                         , executing = True
-                         , fetchR    = Nothing
-                         , decodeR   = Nothing
-                         , executeR  = Nothing
-                         , stall     = 0
+newMachine mem = Machine { registers   = blankRegisterFile
+                         , memory      = mem
+                         , cpsr        = blankStatusRegister
+                         , executing   = True
+                         , fetchR      = Nothing
+                         , decodeR     = Nothing
+                         , executeR    = Nothing
+                         , stall       = 0
+                         , totalCycles = 0
                          }
 
 runCPU :: Program -> IO Machine
 runCPU prog = execStateT run (newMachine $ toMemory prog)
 
+testProg :: Program
 testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
             MOV AL NoS R1 (ArgC 20) NoShift,
             MOV AL NoS R1 (ArgR R1) (LSL (ArgC 1)),

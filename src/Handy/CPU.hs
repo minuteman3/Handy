@@ -21,24 +21,26 @@ type FetchRegister   = Maybe InstructionWord
 type DecodeRegister  = Maybe Instruction
 type ExecuteRegister = Maybe Instruction
 
-data Machine = Machine { registers :: Reg.RegisterFile
-                       , memory    :: Memory
-                       , cpsr      :: StatusRegister
-                       , executing :: Bool
-                       , fetchR    :: FetchRegister
-                       , decodeR   :: DecodeRegister
-                       , executeR  :: ExecuteRegister
-                       , stall     :: Word8
+data Machine = Machine { registers   :: Reg.RegisterFile
+                       , memory      :: Memory
+                       , cpsr        :: StatusRegister
+                       , fetchR      :: FetchRegister
+                       , decodeR     :: DecodeRegister
+                       , executeR    :: ExecuteRegister
+                       , stall       :: Word8
+                       , executing   :: Bool
+                       , totalCycles :: Integer
                        } deriving Show
 
-type Run a = StateT Machine IO a
-run :: Run ()
+type CPU a = StateT Machine IO a
+run :: CPU ()
 run = do
     running <- gets executing
     when running $ do
         stalled <- isStalled
+        modify incCycles
         if stalled then
-            state (\machine -> ((), machine { stall = (stall machine) - 1 }))
+            modify reduceStall
         else do
             modify pipeline
             execute =<< gets executeR
@@ -68,20 +70,36 @@ incPC :: Machine -> Machine
 incPC machine = let pc = registers machine `Reg.get` Reg.PC in
                   setRegister Reg.PC ((pc .&. 0xFFFFFFFC) + 4) machine
 
-isStalled :: Run Bool
+incCycles :: Machine -> Machine
+incCycles machine = machine { totalCycles = totalCycles machine + 1 }
+
+isStalled :: CPU Bool
 isStalled = do s <- gets stall
                return $ s > 0
 
-execute :: Maybe Instruction -> Run ()
+reduceStall :: Machine -> Machine
+reduceStall machine = machine { stall = stall machine - 1 }
+
+stallMachine :: Instruction -> Machine -> Machine
+stallMachine (LDR{})  machine = machine { stall = 10 }
+stallMachine (LDRB{}) machine = machine { stall = 10 }
+stallMachine (STR{})  machine = machine { stall = 10 }
+stallMachine (STRB{}) machine = machine { stall = 10 }
+stallMachine (LDM{})  machine = machine { stall = 10 }
+stallMachine (STM{})  machine = machine { stall = 10 }
+stallMachine _        machine = machine
+
+execute :: Maybe Instruction -> CPU ()
 execute Nothing = return ()
 execute (Just i) =
     do rf_pre <- gets registers
        execute' i
+       modify $ stallMachine i
        rf_post <- gets registers
        when (rf_pre `Reg.get` Reg.PC /= rf_post `Reg.get` Reg.PC) $
            modify flushPipeline
 
-execute' :: Instruction -> Run ()
+execute' :: Instruction -> CPU ()
 
 execute' JunkInstruction = error "Attempted to execute an unimplemented instruction"
 
@@ -108,39 +126,39 @@ execute' (BX cond src) =
        when (checkCondition cond sr) $ do
            let (rf',_) = compute (AND cond NoS Reg.PC src (ArgC 0xFFFFFFFE) NoShift) rf sr
            let (rf'',_) = compute (SUB cond NoS Reg.PC src (ArgC 4) NoShift) rf' sr
-           put $ machine { registers = rf'', stall = 10 }
+           put $ machine { registers = rf'' }
 
 execute' (LDR cond (ArgR dest) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                rf'' = Reg.set rf' dest (fromIntegral (mem `getWord` addr))
-           put $ machine { registers = rf'', stall = 10 }
+           put $ machine { registers = rf'' }
 
 
 execute' (LDRB cond (ArgR dest) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                rf'' = Reg.set rf' dest (fromIntegral (mem `getByte` addr))
-           put $ machine { registers = rf'', stall = 10 }
+           put $ machine { registers = rf'' }
 
 execute' (STR cond (ArgR src) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                mem' = writeWord mem addr (fromIntegral (rf  `Reg.get` src))
-           put $ machine { registers = rf', memory = mem', stall = 10 }
+           put $ machine { registers = rf', memory = mem' }
 
 execute' (STRB cond (ArgR src) addrm) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let (addr,rf') = computeAddress addrm rf sr
                mem' = writeByte mem addr (fromIntegral (rf  `Reg.get` src))
-           put $ machine { registers = rf', memory = mem', stall = 10 }
+           put $ machine { registers = rf', memory = mem' }
 
 execute' (STM cond addrm (ArgR src) update regs) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
         let addr = rf `Reg.get` src
             (start,end) = computeStartEnd addr addrm regs
@@ -151,10 +169,10 @@ execute' (STM cond addrm (ArgR src) update regs) =
             rf' = if update == Update then
                      updateReg start end addrm rf src
                   else rf
-        put $ machine { registers = rf', memory = mem', stall = 10 }
+        put $ machine { registers = rf', memory = mem' }
 
 execute' (LDM cond addrm (ArgR src) update regs) =
-    do machine@(Machine rf mem sr _ _ _ _ _) <- get
+    do machine@(Machine rf mem sr _ _ _ _ _ _) <- get
        when (checkCondition cond sr) $ do
            let addr = rf `Reg.get` src
                (start,end) =  computeStartEnd addr addrm regs
@@ -165,7 +183,7 @@ execute' (LDM cond addrm (ArgR src) update regs) =
                rf'' = if update == Update then
                          updateReg start end addrm rf' src
                       else rf'
-           put $ machine { registers = rf'', stall = 10 }
+           put $ machine { registers = rf'' }
 
 
 execute' i = do machine <- get

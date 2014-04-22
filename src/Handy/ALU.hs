@@ -53,6 +53,12 @@ compute' (SMULL cond _ dest1 dest2 src1 src2) rf sr =
 compute' (SMLAL cond _ dest1 dest2 src1 src2) rf sr =
     computeLongArithAccum smul dest1 dest2 src1 src2 cond sr rf setSRarithLong
 
+compute' (UMULL cond _ dest1 dest2 src1 src2) rf sr =
+    computeLongArith umul dest1 dest2 src1 src2 cond sr rf setSRarithLong
+
+compute' (UMLAL cond _ dest1 dest2 src1 src2) rf sr =
+    computeLongArithAccum umul dest1 dest2 src1 src2 cond sr rf setSRarithLong
+
 compute' (ADD cond _ dest src1 src2 shft) rf sr =
     computeArith (+) dest src1 arg2 cond sr rf setSRarith2
     where arg2             = ArgC shiftresult
@@ -384,14 +390,12 @@ computeRotateR val (ArgR shft) rf sr =
 -- to the B and BL instructions.
 computeBranchOffset :: Argument Constant -> Argument Constant
 computeBranchOffset (ArgC val) =
-
     ArgC result
     where result                    = se_src `shiftL` 2
           se_src | src `testBit` 23 = src .|. fromIntegral (complement mask)
                  | otherwise        = src
           src                       = fromIntegral mask .&. val
           mask                      = bitmask 24
-
 
 checkCondition :: Condition -> StatusRegister -> Bool
 checkCondition AL _    = True

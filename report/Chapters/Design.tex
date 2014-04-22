@@ -1,0 +1,46 @@
+% Design Chapter
+
+\chapter{Design} % Chapter title
+
+\label{ch:design} % For referencing the chapter elsewhere, use \autoref{ch:name}
+
+%----------------------------------------------------------------------------------------
+
+\section{Overview}
+
+The architecture and overall design of \emph{Handy} is based on the layout of a physical ARM7TDMI processor with separate CPU, ALU, memory, and instruction decoder as well as subcomponents that are necessary to construct each. In this chapter the design of each major component will be discussed in turn. Conceptually the components attempt to maintain strict separation with communication between each being brokered by a CPU. In addition to the components that perform the execution of instructions, perhaps the most important components of all are the instructions themselves. These are modeled very closely on their appearance in ARM assembly programs, primarily because this allows a hypothetical ARM assembly programmer to more easily approach working with \emph{Handy}. Additionally, this format clearly and succinctly enumerates all necessary fields of an instruction as an abstraction of machine code.
+
+The primary goal throughout the design was a complete and semantically accurate reproduction of the ARM instruction set architecture. This goal evolved over time once implementation started and grew to encompass additional features, taking inspiration from the physical ARM7TDMI processor to add simulation of hardware components such as the instruction pipeline.
+
+%----------------------------------------------------------------------------------------
+
+\section{Instructions}
+
+Instructions were designed as a generalised algebraic data type that would enclose all possible constructions, using data constructors to represent the instruction name and parameters for each subsequent field. The original intention was that this would yield easily readable instructions even in \emph{Handy}'s internal representation, with the use of GADTs strictly enforcing types of all parameters.
+
+\section{Central Processing Unit}
+
+Early in the design process I decided that the CPU should be the only ``stateful'' component in the simulator. The entire design process from then on was informed by this decision. This necessitated more careful planning of various components but also made reasoning about the system as a whole considerably simpler. By constraining stateful actions to one small part of the code base, the remainder can be written in simple, explicit Haskell functions that can be tested in isolation.
+
+The result of these steps is a small monadic core that can be easily reasoned about in a formal fashion and implemented or extended very rapidly. Even complex modeling issues such as instruction pipelining and stalling of execution could be easily captured by this representation, and implementations of new instructions introduced to the system concisely.
+
+\section{Arithmetic and Logic Unit}
+
+The major design goal for the ALU was to conform exactly with the operational semantics given as pseudo-code in the ARM Architecture Reference Manual for each instruction. This was accomplished through an iterative design and implementation process --- an instruction would be studied in detail in the Reference Manual then implemented precisely in the ALU. When patterns emerged in the implementation of instructions they would be abstracted into a higher order function and the process would repeat.
+
+The ALU itself is designed in a purely functional style, declaring no data types and having no internal state. Its existence as a ``component'' of the simulator is entirely notional, as it is designed as a library of functions that implement arithmetic and logic operations when given an instruction rather than being modeled as part of the system.
+
+\section{Memory}
+\label{sec:design:memory}
+
+Memory in \emph{Handy} is designed to be as simple as possible, satisfying only the most vital requirements. With that in mind, memory only needs to be a dumb store which maps 32-bit keys to 8-bit values and supports fetching individual bytes or Big Endian four byte words. Implementation details beyond this simple interface are irrelevant for our purposes.
+
+\section{Instruction Decoder}
+\label{sec:design:decoder}
+
+The necessity of the Instruction Decoder only became apparent after implementation of other components had commenced. To implement a correct Von Neumann architecture instructions need to be able to be stored in the data memory of the simulator, and thus must be represented in byte form. This necessitates a binary parser to convert the 32 bit instruction words to the Instruction type used by the simulator. Fortunately all necessary information for decoding the binary form of instructions could be found in the ARM Architecture Reference Manual\citep{armarm:2005}, albeit listed in alphabetical order with only the internal structure of an individual instruction's bit pattern enumerated. Rather than attempt to arrive at a formalisation ahead of time design and implementation took place in parallel, developing a decoder for limited subsets of the ARM instruction set and confirming correctness or redesigning as necessary.
+
+This naturally converged on an effective and correct decoder that can disassemble machine code representations of all instructions implemented by \emph{Handy}. Haskell's Data.Binary package shone as being the perfect tool for implementation, providing access to powerful tools such as parser combinators that allowed components of the decoder to be implemented and tested in isolation before being combined into larger wholes.
+
+Due to this evolutionary development process no in depth design took place for the Instruction Decoder ahead of time. An in-depth review of structure of ARM machine code may be found in Appendix~\ref{appendix:instructions}, which is useful in understanding the issues faced in designing the instruction decoder and summarises all necessary information required for parsing ARM machine code. A more detailed discussion of how the problem was tackled will be found in \autoref{ch:implementation} - Implementation.
+
