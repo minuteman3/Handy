@@ -5,8 +5,9 @@ import Handy.Registers
 import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Encoder
-import qualified Data.Bytestring as B
-import Control.Environment
+import qualified Data.ByteString as B
+import qualified Data.List as DL
+import System.Environment
 import Data.Word
 import Data.Bits
 import Control.Monad.State
@@ -15,7 +16,7 @@ import Prelude hiding(GT,LE,EQ)
 type Program = [Instruction]
 
 toMemoryBinary :: [Word32] -> Memory
-toMemoryBinary = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..]
+toMemoryBinary x = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..] x
 
 toMemory :: [Instruction] -> Memory
 toMemory is = toMemoryBinary $ map serialiseInstruction is
@@ -53,7 +54,7 @@ toWord32List :: B.ByteString -> [Word32]
 toWord32List = map octetToWord . group 4 . B.unpack
 
 octetToWord :: [Word8] -> Word32
-octetToWord = foldl' addup 0
+octetToWord = DL.foldl' addup 0
   where addup a o = (a `shiftL` 8) .|. fromIntegral o
 
 main :: IO ()
@@ -62,7 +63,8 @@ main = do
     let inputfile = head args
     binarydata <- B.readFile inputfile
     let program = toWord32List binarydata
-    execStateT run (newMachine $ toMemoryBinary program)
+    final <- execStateT run (newMachine $ toMemoryBinary program)
+    putStrLn $ show final
 
 testProg :: Program
 testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
