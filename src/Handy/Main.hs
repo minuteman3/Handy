@@ -5,13 +5,21 @@ import Handy.Registers
 import Handy.Instructions
 import Handy.StatusRegister
 import Handy.Encoder
+import qualified Data.ByteString as B
+import qualified Data.List as DL
+import System.Environment
+import Data.Word
+import Data.Bits
 import Control.Monad.State
 import Prelude hiding(GT,LE,EQ)
 
 type Program = [Instruction]
 
+toMemoryBinary :: [Word32] -> Memory
+toMemoryBinary x = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..] x
+
 toMemory :: [Instruction] -> Memory
-toMemory is = foldr (\(a,i) mem -> writeWord mem a i) blankMemory $ zip [0,4..] $ map serialiseInstruction is
+toMemory is = toMemoryBinary $ map serialiseInstruction is
 
 demoProg :: Program
 demoProg = [MOV AL NoS R0 (ArgC 32) NoShift,
@@ -36,6 +44,27 @@ newMachine mem = Machine { registers   = blankRegisterFile
 
 runCPU :: Program -> IO Machine
 runCPU prog = execStateT run (newMachine $ toMemory prog)
+
+group :: Int -> [a] -> [[a]]
+group x [] = []
+group x l = first : group x rest
+      where (first, rest) = splitAt x l
+
+toWord32List :: B.ByteString -> [Word32]
+toWord32List = map octetToWord . group 4 . B.unpack
+
+octetToWord :: [Word8] -> Word32
+octetToWord = DL.foldl' addup 0
+  where addup a o = (a `shiftL` 8) .|. fromIntegral o
+
+main :: IO ()
+main = do
+    args <- getArgs
+    let inputfile = head args
+    binarydata <- B.readFile inputfile
+    let program = toWord32List binarydata
+    final <- execStateT run (newMachine $ toMemoryBinary program)
+    putStrLn $ show final
 
 testProg :: Program
 testProg =  [MOV AL NoS R0 (ArgC 10) NoShift,
@@ -87,4 +116,3 @@ testProg7 = [MOV AL NoS R0 (ArgC 1) NoShift
             ,MOV AL NoS R1 (ArgC 2) NoShift
             ,SMULL AL NoS R2 R3 (ArgR R0) (ArgR R1)
             ,HALT]
-
